@@ -25,6 +25,82 @@ The meme generator creates memes using AI for template selection and caption gen
 - Multiple template and caption options
 - Vector similarity search for relevant templates
 
+## Vector Similarity Search Implementation
+
+### Overview
+The meme generator uses vector embeddings and similarity search to find the most relevant templates for a user's prompt. This system enables semantic understanding beyond simple keyword matching.
+
+### How It Works
+1. **Embedding Generation**:
+   - User prompts are converted to vector embeddings using OpenAI's `text-embedding-3-small` model
+   - Each embedding is a 1536-dimensional vector representing the semantic meaning of the text
+   - Template descriptions are also converted to embeddings during template creation/update
+
+2. **Storage**:
+   - Embeddings are stored in the Supabase `meme_templates` table
+   - Uses the `pgvector` extension for vector operations
+   - Embeddings are stored as string representations of arrays
+
+3. **Similarity Calculation**:
+   - Uses cosine similarity to measure the semantic closeness between vectors
+   - The `cosineSimilarity` function handles both array and string-formatted embeddings
+   - Higher similarity scores (closer to 1.0) indicate better matches
+
+4. **Search Process**:
+   - When a user enters a prompt, it's converted to an embedding
+   - The system queries Supabase using a custom SQL function `match_meme_templates`
+   - The function finds templates with embeddings most similar to the prompt
+   - Results are ordered by similarity and filtered by greenscreen mode
+
+5. **SQL Implementation**:
+   ```sql
+   CREATE FUNCTION match_meme_templates(
+     query_embedding vector(1536),
+     match_threshold float,
+     match_count int,
+     is_greenscreen_filter boolean
+   )
+   RETURNS TABLE (
+     id uuid,
+     name text,
+     video_url text,
+     instructions text,
+     similarity float
+   )
+   LANGUAGE SQL
+   AS $$
+     SELECT 
+       meme_templates.id,
+       meme_templates.name,
+       meme_templates.video_url,
+       meme_templates.instructions,
+       1 - (meme_templates.embedding <=> query_embedding) as similarity
+     FROM meme_templates
+     WHERE 
+       embedding IS NOT NULL AND
+       is_greenscreen = is_greenscreen_filter
+     ORDER BY embedding <=> query_embedding
+     LIMIT match_count;
+   $$;
+   ```
+
+6. **Fallback Mechanism**:
+   - If no templates are found via vector search, the system falls back to a default selection
+   - This ensures users always get template options even for unusual prompts
+
+### Implementation Notes
+- The `<=>` operator is PostgreSQL's vector distance operator
+- We use `1 - distance` to convert distance to similarity (0 to 1 scale)
+- The system returns the top 5 most similar templates by default
+- Embeddings must be properly formatted as arrays for similarity calculation
+
+### Troubleshooting
+- If similarity search returns no results, check:
+  1. Embedding format in the database (should be parseable as arrays)
+  2. The SQL function parameters and implementation
+  3. The embedding generation process
+  4. The cosine similarity calculation
+
 ### 3. Text System
 #### Caption Settings
 ```typescript
@@ -33,6 +109,8 @@ interface TextSettings {
   font: string;        // Font family
   verticalPosition: number; // % from top (5-95)
   alignment: 'left' | 'center' | 'right';
+  color: 'white' | 'black';  // Text color
+  strokeWeight: number;      // Stroke weight as multiplier of font size
 }
 ```
 
@@ -45,6 +123,16 @@ interface Label {
   verticalPosition: number;   // % from top (0-100)
   size: number;              // Font size (40-120)
   font: string;              // Font family
+}
+```
+
+#### Global Label Settings
+```typescript
+interface LabelSettings {
+  font: string;              // Font family for all labels
+  size: number;              // Font size for all labels (40-120)
+  color: 'white' | 'black';  // Text color for all labels
+  strokeWeight: number;      // Stroke weight as multiplier of font size
 }
 ```
 
@@ -128,6 +216,8 @@ interface Label {
 - Mode selection (Regular/Greenscreen)
 - Template and caption generation
 - Results display and selection
+- Integrates with vector similarity search via API calls to `/api/meme-selection`
+- Handles template selection and caption generation
 
 ### Video Processing
 
@@ -145,6 +235,23 @@ const targetHeight = targetWidth / videoAspect;
 if (g > 100 && g > 1.4 * r && g > 1.4 * b) {
   pixels[i + 3] = 0; // Make pixel transparent
 }
+```
+
+### Text Rendering
+```typescript
+// Caption rendering with customizable color and stroke
+const textColor = textSettings?.color || 'white';
+const strokeWeight = textSettings?.strokeWeight !== undefined 
+  ? fontSize * textSettings.strokeWeight 
+  : fontSize * 0.08;
+
+// Set stroke color to be opposite of text color for better visibility
+ctx.strokeStyle = textColor === 'white' ? '#000000' : '#FFFFFF';
+ctx.lineWidth = strokeWeight;
+ctx.strokeText(line, x, y);
+
+ctx.fillStyle = textColor === 'white' ? '#FFFFFF' : '#000000';
+ctx.fillText(line, x, y);
 ```
 
 ### Preview System
@@ -170,6 +277,16 @@ const [textSettings, setTextSettings] = useState<TextSettings>({
   font: 'Impact',
   verticalPosition: 25,
   alignment: 'center',
+  color: 'white',
+  strokeWeight: 0.08,
+});
+
+// Label Configuration
+const [labelSettings, setLabelSettings] = useState({
+  font: 'Impact',
+  size: 78,
+  color: 'white',
+  strokeWeight: 0.08,
 });
 
 // Additional Text
@@ -323,6 +440,8 @@ try {
    - Animation support
 
 3. Text Enhancements
+   - More color options beyond black/white
+   - Gradient text support
    - Animation options
    - More font options
    - Style presets
@@ -332,12 +451,20 @@ try {
    - Caching system
    - Optimized greenscreen algorithm
 
+5. Vector Search Improvements
+   - Better template descriptions for more accurate embeddings
+   - Improved embedding storage format (native arrays)
+   - Fine-tuned similarity thresholds for different use cases
+   - Periodic reindexing of embeddings with newer models
+
 ## Development Guidelines
 
 1. Adding Templates
    - Ensure proper aspect ratio
    - Test in both modes
    - Include usage instructions
+   - Write detailed descriptions for better vector matching
+   - Generate embeddings for all new templates
 
 2. Modifying Processing
    - Test with various video types
@@ -363,11 +490,14 @@ try {
 - [ ] Video loading in both modes
 - [ ] Background selection and processing
 - [ ] Text positioning and styling
+- [ ] Text color and stroke weight customization
+- [ ] Label positioning and styling
 - [ ] Preview generation
 - [ ] Download functionality
 - [ ] Error handling
 - [ ] Mobile responsiveness
 - [ ] Performance metrics
+- [ ] Vector similarity search accuracy
 
 Additional checks:
 - [ ] Unsplash search functionality

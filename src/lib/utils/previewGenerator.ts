@@ -16,7 +16,13 @@ export async function createMemePreview(
   backgroundImage?: string,
   isGreenscreen?: boolean,
   textSettings?: TextSettings,
-  labels?: Label[]
+  labels?: Label[],
+  labelSettings?: {
+    font: string;
+    size: number;
+    color: 'white' | 'black';
+    strokeWeight: number;
+  }
 ): Promise<HTMLCanvasElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
@@ -112,14 +118,21 @@ export async function createMemePreview(
           ? canvas.width * 0.95 
           : canvas.width / 2;
 
+      // Get text color and stroke weight from settings or use defaults
+      const textColor = textSettings?.color || 'white';
+      const strokeWeight = textSettings?.strokeWeight !== undefined 
+        ? fontSize * textSettings.strokeWeight 
+        : fontSize * 0.08;
+
       lines.forEach((line, index) => {
         const y = textY + (index * lineHeight);
         
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = fontSize * 0.08;
+        // Set stroke color to be opposite of text color for better visibility
+        ctx.strokeStyle = textColor === 'white' ? '#000000' : '#FFFFFF';
+        ctx.lineWidth = strokeWeight;
         ctx.strokeText(line, x, y);
         
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = textColor === 'white' ? '#FFFFFF' : '#000000';
         ctx.fillText(line, x, y);
       });
 
@@ -135,11 +148,18 @@ export async function createMemePreview(
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           
-          ctx.strokeStyle = '#000000';
-          ctx.lineWidth = label.size * 0.08;
+          // Get text color and stroke weight from global settings
+          const textColor = labelSettings?.color || 'white';
+          const strokeWeight = labelSettings?.strokeWeight !== undefined 
+            ? label.size * labelSettings.strokeWeight 
+            : label.size * 0.08;
+          
+          // Set stroke color to be opposite of text color for better visibility
+          ctx.strokeStyle = textColor === 'white' ? '#000000' : '#FFFFFF';
+          ctx.lineWidth = strokeWeight;
           ctx.strokeText(label.text, x, y);
           
-          ctx.fillStyle = '#FFFFFF';
+          ctx.fillStyle = textColor === 'white' ? '#FFFFFF' : '#000000';
           ctx.fillText(label.text, x, y);
         });
       }
