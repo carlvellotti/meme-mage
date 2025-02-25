@@ -81,7 +81,12 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [page, setPage] = useState(1);
   const [isUnsplashPickerOpen, setIsUnsplashPickerOpen] = useState(false);
-  const [labelSettings, setLabelSettings] = useState({
+  const [labelSettings, setLabelSettings] = useState<{
+    font: string;
+    size: number;
+    color: 'white' | 'black';
+    strokeWeight: number;
+  }>({
     font: 'Impact',
     size: 78,
     color: 'white',

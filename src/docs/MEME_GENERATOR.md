@@ -109,6 +109,8 @@ interface TextSettings {
   font: string;        // Font family
   verticalPosition: number; // % from top (5-95)
   alignment: 'left' | 'center' | 'right';
+  color: 'white' | 'black';  // Text color
+  strokeWeight: number;      // Stroke weight as multiplier of font size
 }
 ```
 
@@ -121,6 +123,16 @@ interface Label {
   verticalPosition: number;   // % from top (0-100)
   size: number;              // Font size (40-120)
   font: string;              // Font family
+}
+```
+
+#### Global Label Settings
+```typescript
+interface LabelSettings {
+  font: string;              // Font family for all labels
+  size: number;              // Font size for all labels (40-120)
+  color: 'white' | 'black';  // Text color for all labels
+  strokeWeight: number;      // Stroke weight as multiplier of font size
 }
 ```
 
@@ -225,6 +237,23 @@ if (g > 100 && g > 1.4 * r && g > 1.4 * b) {
 }
 ```
 
+### Text Rendering
+```typescript
+// Caption rendering with customizable color and stroke
+const textColor = textSettings?.color || 'white';
+const strokeWeight = textSettings?.strokeWeight !== undefined 
+  ? fontSize * textSettings.strokeWeight 
+  : fontSize * 0.08;
+
+// Set stroke color to be opposite of text color for better visibility
+ctx.strokeStyle = textColor === 'white' ? '#000000' : '#FFFFFF';
+ctx.lineWidth = strokeWeight;
+ctx.strokeText(line, x, y);
+
+ctx.fillStyle = textColor === 'white' ? '#FFFFFF' : '#000000';
+ctx.fillText(line, x, y);
+```
+
 ### Preview System
 - Real-time canvas rendering
 - Maintains 9:16 aspect ratio
@@ -248,6 +277,16 @@ const [textSettings, setTextSettings] = useState<TextSettings>({
   font: 'Impact',
   verticalPosition: 25,
   alignment: 'center',
+  color: 'white',
+  strokeWeight: 0.08,
+});
+
+// Label Configuration
+const [labelSettings, setLabelSettings] = useState({
+  font: 'Impact',
+  size: 78,
+  color: 'white',
+  strokeWeight: 0.08,
 });
 
 // Additional Text
@@ -401,6 +440,8 @@ try {
    - Animation support
 
 3. Text Enhancements
+   - More color options beyond black/white
+   - Gradient text support
    - Animation options
    - More font options
    - Style presets
@@ -449,6 +490,8 @@ try {
 - [ ] Video loading in both modes
 - [ ] Background selection and processing
 - [ ] Text positioning and styling
+- [ ] Text color and stroke weight customization
+- [ ] Label positioning and styling
 - [ ] Preview generation
 - [ ] Download functionality
 - [ ] Error handling
