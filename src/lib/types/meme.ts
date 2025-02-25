@@ -35,4 +35,6 @@ export interface TextSettings {
   font: string;
   verticalPosition: number;
   alignment: 'left' | 'center' | 'right';
+  color: 'white' | 'black';
+  strokeWeight: number;
 } 

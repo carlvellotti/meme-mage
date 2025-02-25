@@ -68,10 +68,12 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
   const [isLoadingBackgrounds, setIsLoadingBackgrounds] = useState(false);
   const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
   const [textSettings, setTextSettings] = useState<TextSettings>({
-    size: 78, // Default size (matches current fontSize calculation of canvas.width * 0.078)
+    size: 78,
     font: 'Impact',
-    verticalPosition: 25, // Default 25% from top
-    alignment: 'center', // Add default alignment
+    verticalPosition: 25,
+    alignment: 'center',
+    color: 'white',
+    strokeWeight: 0.08,
   });
   const [labels, setLabels] = useState<Label[]>([]);
   const [backgroundSearch, setBackgroundSearch] = useState('');
@@ -79,6 +81,12 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [page, setPage] = useState(1);
   const [isUnsplashPickerOpen, setIsUnsplashPickerOpen] = useState(false);
+  const [labelSettings, setLabelSettings] = useState({
+    font: 'Impact',
+    size: 78,
+    color: 'white',
+    strokeWeight: 0.08,
+  });
 
   useEffect(() => {
     async function loadBackgrounds() {
@@ -108,7 +116,7 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
     if (selectedTemplate && (caption || labels.length > 0)) {
       updatePreview();
     }
-  }, [selectedTemplate, caption, selectedBackground, isGreenscreenMode, textSettings, labels]);
+  }, [selectedTemplate, caption, selectedBackground, isGreenscreenMode, textSettings, labels, labelSettings]);
 
   const handleAISelection = (template: MemeTemplate, aiCaption: string, allOptions: SelectedMeme) => {
     setSelectedTemplate(template);
@@ -140,7 +148,8 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
         selectedBackground?.url,
         isGreenscreenMode,
         textSettings,
-        labels
+        labels,
+        labelSettings
       );
 
       // Create download link and trigger download immediately
@@ -179,7 +188,8 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
         selectedBackground?.url,
         isGreenscreenMode,
         textSettings,
-        labels
+        labels,
+        labelSettings
       );
       
       // Force a re-render of the preview
@@ -202,8 +212,8 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
       text: '',
       horizontalPosition: 50,
       verticalPosition: 50,
-      size: 78,
-      font: 'Impact'
+      size: labelSettings.size,
+      font: labelSettings.font,
     };
     setLabels([...labels, newLabel]);
   };
@@ -252,6 +262,18 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
       searchUnsplash(backgroundSearch, page);
     }
   }, [backgroundSearch, page]);
+
+  const updateLabelSetting = (key: keyof typeof labelSettings, value: number | string) => {
+    setLabelSettings(prev => ({
+      ...prev,
+      [key]: value
+    }));
+    
+    setLabels(labels.map(label => ({
+      ...label,
+      [key]: value
+    })));
+  };
 
   return (
     <div className="space-y-8">
@@ -370,6 +392,58 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
                         </button>
                       </div>
                     </div>
+
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Text Color</label>
+                      <div className="flex gap-0 border rounded-md overflow-hidden">
+                        <button
+                          onClick={() => updateTextSetting('color', 'white')}
+                          className={`flex-1 p-2 text-sm font-bold text-black bg-white flex items-center justify-center gap-1
+                            ${textSettings.color === 'white' 
+                              ? 'ring-2 ring-inset ring-blue-500' 
+                              : 'hover:bg-gray-50'
+                            }`}
+                        >
+                          {textSettings.color === 'white' && (
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          White
+                        </button>
+                        <div className="w-px bg-gray-200" />
+                        <button
+                          onClick={() => updateTextSetting('color', 'black')}
+                          className={`flex-1 p-2 text-sm font-bold text-white bg-black flex items-center justify-center gap-1
+                            ${textSettings.color === 'black' 
+                              ? 'ring-2 ring-inset ring-blue-500' 
+                              : 'hover:bg-opacity-90'
+                            }`}
+                        >
+                          {textSettings.color === 'black' && (
+                            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          Black
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Stroke Weight</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min="0"
+                          max="20"
+                          value={Math.round(textSettings.strokeWeight * 100)}
+                          onChange={(e) => updateTextSetting('strokeWeight', parseInt(e.target.value) / 100)}
+                          className="flex-1"
+                        />
+                        <span className="text-sm text-gray-600 w-12">{Math.round(textSettings.strokeWeight * 100)}%</span>
+                      </div>
+                    </div>
                   </div>
                 </details>
 
@@ -426,50 +500,6 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
                         </div>
                       </div>
 
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-900">
-                          Label Style
-                        </summary>
-                        <div className="mt-3 space-y-4 pl-2">
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">Font</label>
-                            <select
-                              value={label.font}
-                              onChange={(e) => updateLabel(label.id, { font: e.target.value })}
-                              className="w-full p-2 text-sm border rounded-md focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="Impact">Impact (Classic Meme)</option>
-                              <option value="Arial Black">Arial Black</option>
-                              <option value="Comic Sans MS">Comic Sans MS</option>
-                              <option value="Helvetica">Helvetica</option>
-                              <option value="Futura">Futura</option>
-                              <option value="Oswald">Oswald</option>
-                              <option value="Anton">Anton</option>
-                              <option value="Roboto">Roboto</option>
-                              <option value="Times New Roman">Times New Roman</option>
-                              <option value="Verdana">Verdana</option>
-                              <option value="Courier New">Courier New</option>
-                              <option value="Bebas Neue">Bebas Neue</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">Size</label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="range"
-                                min="40"
-                                max="120"
-                                value={label.size}
-                                onChange={(e) => updateLabel(label.id, { size: parseInt(e.target.value) })}
-                                className="flex-1"
-                              />
-                              <span className="text-sm text-gray-600 w-12">{label.size}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </details>
-
                       <div className="flex justify-end mt-3">
                         <button
                           onClick={() => deleteLabel(label.id)}
@@ -480,6 +510,104 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
                       </div>
                     </div>
                   ))}
+
+                  {labels.length > 0 && (
+                    <details className="mt-4 mb-6">
+                      <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-900">
+                        Label Style (All Labels)
+                      </summary>
+                      <div className="mt-3 space-y-4 pl-2 p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Font</label>
+                          <select
+                            value={labelSettings.font}
+                            onChange={(e) => updateLabelSetting('font', e.target.value)}
+                            className="w-full p-2 text-sm border rounded-md focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="Impact">Impact (Classic Meme)</option>
+                            <option value="Arial Black">Arial Black</option>
+                            <option value="Comic Sans MS">Comic Sans MS</option>
+                            <option value="Helvetica">Helvetica</option>
+                            <option value="Futura">Futura</option>
+                            <option value="Oswald">Oswald</option>
+                            <option value="Anton">Anton</option>
+                            <option value="Roboto">Roboto</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Verdana">Verdana</option>
+                            <option value="Courier New">Courier New</option>
+                            <option value="Bebas Neue">Bebas Neue</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Size</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="40"
+                              max="120"
+                              value={labelSettings.size}
+                              onChange={(e) => updateLabelSetting('size', parseInt(e.target.value))}
+                              className="flex-1"
+                            />
+                            <span className="text-sm text-gray-600 w-12">{labelSettings.size}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Text Color</label>
+                          <div className="flex gap-0 border rounded-md overflow-hidden">
+                            <button
+                              onClick={() => updateLabelSetting('color', 'white')}
+                              className={`flex-1 p-2 text-sm font-bold text-black bg-white flex items-center justify-center gap-1
+                                ${labelSettings.color === 'white' 
+                                  ? 'ring-2 ring-inset ring-blue-500' 
+                                  : 'hover:bg-gray-50'
+                                }`}
+                            >
+                              {labelSettings.color === 'white' && (
+                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              White
+                            </button>
+                            <div className="w-px bg-gray-200" />
+                            <button
+                              onClick={() => updateLabelSetting('color', 'black')}
+                              className={`flex-1 p-2 text-sm font-bold text-white bg-black flex items-center justify-center gap-1
+                                ${labelSettings.color === 'black' 
+                                  ? 'ring-2 ring-inset ring-blue-500' 
+                                  : 'hover:bg-opacity-90'
+                                }`}
+                            >
+                              {labelSettings.color === 'black' && (
+                                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              Black
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Stroke Weight</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min="0"
+                              max="20"
+                              value={Math.round(labelSettings.strokeWeight * 100)}
+                              onChange={(e) => updateLabelSetting('strokeWeight', parseInt(e.target.value) / 100)}
+                              className="flex-1"
+                            />
+                            <span className="text-sm text-gray-600 w-12">{Math.round(labelSettings.strokeWeight * 100)}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </details>
+                  )}
                 </div>
 
                 <div className="flex gap-4">

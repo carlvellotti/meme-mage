@@ -26,7 +26,13 @@ export async function createMemeVideo(
   backgroundImage?: string,
   isGreenscreen?: boolean,
   textSettings?: TextSettings,
-  labels?: Label[]
+  labels?: Label[],
+  labelSettings?: {
+    font: string;
+    size: number;
+    color: 'white' | 'black';
+    strokeWeight: number;
+  }
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const processingVideo = document.createElement('video');
@@ -165,14 +171,21 @@ export async function createMemeVideo(
               ? canvas.width * 0.95 
               : canvas.width / 2;
 
+          // Get text color and stroke weight from settings or use defaults
+          const textColor = textSettings?.color || 'white';
+          const strokeWeight = textSettings?.strokeWeight !== undefined 
+            ? fontSize * textSettings.strokeWeight 
+            : fontSize * 0.08;
+
           lines.forEach((line, index) => {
             const y = textY + (index * lineHeight);
             
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = fontSize * 0.08;
+            // Set stroke color to be opposite of text color for better visibility
+            ctx.strokeStyle = textColor === 'white' ? '#000000' : '#FFFFFF';
+            ctx.lineWidth = strokeWeight;
             ctx.strokeText(line, x, y);
             
-            ctx.fillStyle = '#FFFFFF';
+            ctx.fillStyle = textColor === 'white' ? '#FFFFFF' : '#000000';
             ctx.fillText(line, x, y);
           });
 
@@ -184,17 +197,23 @@ export async function createMemeVideo(
               const x = canvas.width * (label.horizontalPosition / 100);
               const y = canvas.height * (label.verticalPosition / 100);
               
-              // Use label's size instead of caption size
+              // Use label's size and font
               ctx.font = `bold ${label.size}px ${label.font}`;
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
               
-              // Draw text with outline - use label.size for line width
-              ctx.strokeStyle = '#000000';
-              ctx.lineWidth = label.size * 0.08;
+              // Get text color and stroke weight from global settings
+              const textColor = labelSettings?.color || 'white';
+              const strokeWeight = labelSettings?.strokeWeight !== undefined 
+                ? label.size * labelSettings.strokeWeight 
+                : label.size * 0.08;
+              
+              // Set stroke color to be opposite of text color for better visibility
+              ctx.strokeStyle = textColor === 'white' ? '#000000' : '#FFFFFF';
+              ctx.lineWidth = strokeWeight;
               ctx.strokeText(label.text, x, y);
               
-              ctx.fillStyle = '#FFFFFF';
+              ctx.fillStyle = textColor === 'white' ? '#FFFFFF' : '#000000';
               ctx.fillText(label.text, x, y);
             });
           }

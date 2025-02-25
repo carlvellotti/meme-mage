@@ -25,6 +25,82 @@ The meme generator creates memes using AI for template selection and caption gen
 - Multiple template and caption options
 - Vector similarity search for relevant templates
 
+## Vector Similarity Search Implementation
+
+### Overview
+The meme generator uses vector embeddings and similarity search to find the most relevant templates for a user's prompt. This system enables semantic understanding beyond simple keyword matching.
+
+### How It Works
+1. **Embedding Generation**:
+   - User prompts are converted to vector embeddings using OpenAI's `text-embedding-3-small` model
+   - Each embedding is a 1536-dimensional vector representing the semantic meaning of the text
+   - Template descriptions are also converted to embeddings during template creation/update
+
+2. **Storage**:
+   - Embeddings are stored in the Supabase `meme_templates` table
+   - Uses the `pgvector` extension for vector operations
+   - Embeddings are stored as string representations of arrays
+
+3. **Similarity Calculation**:
+   - Uses cosine similarity to measure the semantic closeness between vectors
+   - The `cosineSimilarity` function handles both array and string-formatted embeddings
+   - Higher similarity scores (closer to 1.0) indicate better matches
+
+4. **Search Process**:
+   - When a user enters a prompt, it's converted to an embedding
+   - The system queries Supabase using a custom SQL function `match_meme_templates`
+   - The function finds templates with embeddings most similar to the prompt
+   - Results are ordered by similarity and filtered by greenscreen mode
+
+5. **SQL Implementation**:
+   ```sql
+   CREATE FUNCTION match_meme_templates(
+     query_embedding vector(1536),
+     match_threshold float,
+     match_count int,
+     is_greenscreen_filter boolean
+   )
+   RETURNS TABLE (
+     id uuid,
+     name text,
+     video_url text,
+     instructions text,
+     similarity float
+   )
+   LANGUAGE SQL
+   AS $$
+     SELECT 
+       meme_templates.id,
+       meme_templates.name,
+       meme_templates.video_url,
+       meme_templates.instructions,
+       1 - (meme_templates.embedding <=> query_embedding) as similarity
+     FROM meme_templates
+     WHERE 
+       embedding IS NOT NULL AND
+       is_greenscreen = is_greenscreen_filter
+     ORDER BY embedding <=> query_embedding
+     LIMIT match_count;
+   $$;
+   ```
+
+6. **Fallback Mechanism**:
+   - If no templates are found via vector search, the system falls back to a default selection
+   - This ensures users always get template options even for unusual prompts
+
+### Implementation Notes
+- The `<=>` operator is PostgreSQL's vector distance operator
+- We use `1 - distance` to convert distance to similarity (0 to 1 scale)
+- The system returns the top 5 most similar templates by default
+- Embeddings must be properly formatted as arrays for similarity calculation
+
+### Troubleshooting
+- If similarity search returns no results, check:
+  1. Embedding format in the database (should be parseable as arrays)
+  2. The SQL function parameters and implementation
+  3. The embedding generation process
+  4. The cosine similarity calculation
+
 ### 3. Text System
 #### Caption Settings
 ```typescript
@@ -128,6 +204,8 @@ interface Label {
 - Mode selection (Regular/Greenscreen)
 - Template and caption generation
 - Results display and selection
+- Integrates with vector similarity search via API calls to `/api/meme-selection`
+- Handles template selection and caption generation
 
 ### Video Processing
 
@@ -332,12 +410,20 @@ try {
    - Caching system
    - Optimized greenscreen algorithm
 
+5. Vector Search Improvements
+   - Better template descriptions for more accurate embeddings
+   - Improved embedding storage format (native arrays)
+   - Fine-tuned similarity thresholds for different use cases
+   - Periodic reindexing of embeddings with newer models
+
 ## Development Guidelines
 
 1. Adding Templates
    - Ensure proper aspect ratio
    - Test in both modes
    - Include usage instructions
+   - Write detailed descriptions for better vector matching
+   - Generate embeddings for all new templates
 
 2. Modifying Processing
    - Test with various video types
@@ -368,6 +454,7 @@ try {
 - [ ] Error handling
 - [ ] Mobile responsiveness
 - [ ] Performance metrics
+- [ ] Vector similarity search accuracy
 
 Additional checks:
 - [ ] Unsplash search functionality
