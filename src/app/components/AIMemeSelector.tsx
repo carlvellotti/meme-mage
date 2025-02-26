@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { MemeTemplate } from '@/lib/supabase/types';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
+import SpinningOrb from './SpinningOrb';
 
 interface AIMemeSelector {
   onSelectTemplate: (template: MemeTemplate, caption: string, allOptions: SelectedMeme) => void;
@@ -150,11 +151,9 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Generating meme options...</p>
-        </div>
+      <div className="flex flex-col items-center justify-center py-12">
+        <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
+        <p className="mt-4 text-gray-500">Generating meme options...</p>
       </div>
     );
   }
