@@ -106,81 +106,83 @@ export default function SpinningOrb({
       const sinAngle = Math.sin(turnAngle);
       const cosAngle = Math.cos(turnAngle);
       
-      // Clear canvas
-      context.fillStyle = "rgba(0, 0, 0, 0)";
-      context.clearRect(0, 0, displayWidth, displayHeight);
+      // Clear canvas - Add null check here
+      if (context) {
+        context.fillStyle = "rgba(0, 0, 0, 0)";
+        context.clearRect(0, 0, displayWidth, displayHeight);
       
-      // Update and draw particles
-      let p = particleList.first;
-      while (p != null) {
-        // Record next particle before list is altered
-        const nextParticle = p.next;
-        
-        // Update age
-        p.age++;
-        
-        // If the particle is past its "stuck" time, it will begin to move
-        if (p.age > p.stuckTime) {
-          p.velX += p.accelX + randAccelX * (Math.random() * 2 - 1);
-          p.velY += p.accelY + randAccelY * (Math.random() * 2 - 1);
-          p.velZ += p.accelZ + randAccelZ * (Math.random() * 2 - 1);
+        // Update and draw particles
+        let p = particleList.first;
+        while (p != null) {
+          // Record next particle before list is altered
+          const nextParticle = p.next;
           
-          p.x += p.velX;
-          p.y += p.velY;
-          p.z += p.velZ;
-        }
-        
-        // Calculate display coordinates
-        const rotX = cosAngle * p.x + sinAngle * (p.z - sphereCenterZ);
-        const rotZ = -sinAngle * p.x + cosAngle * (p.z - sphereCenterZ) + sphereCenterZ;
-        const m = radius_sp * fLen / (fLen - rotZ);
-        p.projX = rotX * m + projCenterX;
-        p.projY = p.y * m + projCenterY;
-        
-        // Update alpha according to envelope parameters
-        if (p.age < p.attack + p.hold + p.decay) {
-          if (p.age < p.attack) {
-            p.alpha = (p.holdValue - p.initValue) / p.attack * p.age + p.initValue;
-          } else if (p.age < p.attack + p.hold) {
-            p.alpha = p.holdValue;
-          } else if (p.age < p.attack + p.hold + p.decay) {
-            p.alpha = (p.lastValue - p.holdValue) / p.decay * (p.age - p.attack - p.hold) + p.holdValue;
+          // Update age
+          p.age++;
+          
+          // If the particle is past its "stuck" time, it will begin to move
+          if (p.age > p.stuckTime) {
+            p.velX += p.accelX + randAccelX * (Math.random() * 2 - 1);
+            p.velY += p.accelY + randAccelY * (Math.random() * 2 - 1);
+            p.velZ += p.accelZ + randAccelZ * (Math.random() * 2 - 1);
+            
+            p.x += p.velX;
+            p.y += p.velY;
+            p.z += p.velZ;
           }
-        } else {
-          p.dead = true;
-        }
-        
-        // Check if particle is still within viewable range
-        let outsideTest = false;
-        if (
-          p.projX > displayWidth || 
-          p.projX < 0 || 
-          p.projY < 0 || 
-          p.projY > displayHeight || 
-          rotZ > zMax
-        ) {
-          outsideTest = true;
-        }
-        
-        if (outsideTest || p.dead) {
-          recycle(p);
-        } else {
-          // Depth-dependent darkening
-          let depthAlphaFactor = (1 - rotZ / zeroAlphaDepth);
-          depthAlphaFactor = depthAlphaFactor > 1 
-            ? 1 
-            : (depthAlphaFactor < 0 ? 0 : depthAlphaFactor);
           
-          context.fillStyle = rgbString + depthAlphaFactor * p.alpha + ")";
+          // Calculate display coordinates
+          const rotX = cosAngle * p.x + sinAngle * (p.z - sphereCenterZ);
+          const rotZ = -sinAngle * p.x + cosAngle * (p.z - sphereCenterZ) + sphereCenterZ;
+          const m = radius_sp * fLen / (fLen - rotZ);
+          p.projX = rotX * m + projCenterX;
+          p.projY = p.y * m + projCenterY;
           
-          // Draw
-          context.beginPath();
-          context.arc(p.projX, p.projY, m * particleRad, 0, 2 * Math.PI, false);
-          context.closePath();
-          context.fill();
+          // Update alpha according to envelope parameters
+          if (p.age < p.attack + p.hold + p.decay) {
+            if (p.age < p.attack) {
+              p.alpha = (p.holdValue - p.initValue) / p.attack * p.age + p.initValue;
+            } else if (p.age < p.attack + p.hold) {
+              p.alpha = p.holdValue;
+            } else if (p.age < p.attack + p.hold + p.decay) {
+              p.alpha = (p.lastValue - p.holdValue) / p.decay * (p.age - p.attack - p.hold) + p.holdValue;
+            }
+          } else {
+            p.dead = true;
+          }
+          
+          // Check if particle is still within viewable range
+          let outsideTest = false;
+          if (
+            p.projX > displayWidth || 
+            p.projX < 0 || 
+            p.projY < 0 || 
+            p.projY > displayHeight || 
+            rotZ > zMax
+          ) {
+            outsideTest = true;
+          }
+          
+          if (outsideTest || p.dead) {
+            recycle(p);
+          } else {
+            // Depth-dependent darkening
+            let depthAlphaFactor = (1 - rotZ / zeroAlphaDepth);
+            depthAlphaFactor = depthAlphaFactor > 1 
+              ? 1 
+              : (depthAlphaFactor < 0 ? 0 : depthAlphaFactor);
+            
+            context.fillStyle = rgbString + depthAlphaFactor * p.alpha + ")";
+            
+            // Draw
+            context.beginPath();
+            context.arc(p.projX, p.projY, m * particleRad, 0, 2 * Math.PI, false);
+            context.closePath();
+            context.fill();
+          }
+          
+          p = nextParticle;
         }
-        
-        p = nextParticle;
       }
     }
     
