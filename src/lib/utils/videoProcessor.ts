@@ -141,7 +141,7 @@ export async function createMemeVideo(
     });
 
     // Step 6: Start recording and return promise that resolves with the final video blob
-    return new Promise((resolve) => {
+    return new Promise<Blob>((resolve) => {
       const chunks: Blob[] = [];
       
       recorder.ondataavailable = (e) => {
