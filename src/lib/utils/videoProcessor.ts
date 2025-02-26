@@ -6,6 +6,9 @@ declare global {
   interface HTMLCanvasElement {
     captureStream(frameRate?: number): MediaStream;
   }
+  interface HTMLAudioElement {
+    captureStream(): MediaStream;
+  }
 }
 
 import { TextSettings } from '@/lib/types/meme';
