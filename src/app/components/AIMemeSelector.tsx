@@ -83,57 +83,138 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
         `${template.originalIndex}. ${template.name}\nInstructions: ${template.instructions || 'No specific instructions'}`
       ).join('\n');
 
-      // Make API call for templates and captions
-      const aiResponse = await fetch('/api/anthropic/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{
-            role: 'user',
-            content: `I want to create a meme with this idea: "${prompt}"\n\nAvailable templates:\n${templatesText}`,
-            audience: audience || 'general audience'
-          }]
-        }),
-      });
+      console.log('=== DEBUG: Meme Generation Process ===');
+      console.log('Prompt:', prompt);
+      console.log('Audience:', audience || 'general audience');
+      console.log('Greenscreen Mode:', isGreenscreenMode);
+      console.log('Templates Count:', templatesWithIndices.length);
 
-      if (!aiResponse.ok) {
-        throw new Error('Failed to get AI response');
+      // Try the tool-based endpoint first
+      try {
+        console.log('Attempting tool-based template selection...');
+        // Make API call for templates and captions using the tool-based endpoint
+        const aiResponse = await fetch('/api/anthropic/tool-selection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{
+              role: 'user',
+              content: `I want to create a meme with this idea: "${prompt}"\n\nAvailable templates:\n${templatesText}`,
+              audience: audience || 'general audience'
+            }]
+          }),
+        });
+
+        if (aiResponse.ok) {
+          console.log('Tool-based template selection succeeded!');
+          const data: AIResponse = await aiResponse.json();
+          console.log('Tool-based response templates:', data.templates.length);
+          
+          // Map both templates to their full data
+          const selectedTemplates = data.templates.map((templateData: TemplateResponse) => {
+            console.log('Looking for template number:', templateData.template);
+            console.log('Available templates:', templatesWithIndices.map((t: TemplateWithIndex) => ({
+              index: t.originalIndex,
+              name: t.name
+            })));
+
+            const selectedTemplate = templatesWithIndices.find(
+              (t: TemplateWithIndex) => t.originalIndex === templateData.template
+            );
+            
+            if (!selectedTemplate) {
+              throw new Error(`Could not find template ${templateData.template}`);
+            }
+
+            console.log('Found template:', selectedTemplate.name);
+
+            return {
+              template: selectedTemplate,
+              captions: templateData.captions
+            };
+          });
+
+          console.log('Selected templates:', selectedTemplates.map(t => ({
+            name: t.template.name,
+            captions: t.captions
+          })));
+
+          setMeme({
+            templates: selectedTemplates
+          });
+          return; // Exit early if successful
+        }
+        
+        // If we get here, the tool-based endpoint failed
+        console.warn('Tool-based template selection failed, falling back to regular endpoint');
+      } catch (error) {
+        console.warn('Error with tool-based endpoint:', error);
+        console.warn('Falling back to regular endpoint');
       }
-
-      const data: AIResponse = await aiResponse.json();
       
-      // Map both templates to their full data
-      const selectedTemplates = data.templates.map((templateData: TemplateResponse) => {
-        console.log('Looking for template number:', templateData.template);
-        console.log('Available templates:', templatesWithIndices.map((t: TemplateWithIndex) => ({
-          index: t.originalIndex,
-          name: t.name
+      // Fallback to regular endpoint
+      try {
+        console.log('Using fallback (non-tool) endpoint for template selection...');
+        const fallbackResponse = await fetch('/api/anthropic/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{
+              role: 'user',
+              content: `I want to create a meme with this idea: "${prompt}"\n\nAvailable templates:\n${templatesText}`,
+              audience: audience || 'general audience'
+            }]
+          }),
+        });
+        
+        if (!fallbackResponse.ok) {
+          console.error('Fallback endpoint failed with status:', fallbackResponse.status);
+          throw new Error('Failed to get AI response from fallback endpoint');
+        }
+        
+        console.log('Fallback endpoint succeeded!');
+        const data: AIResponse = await fallbackResponse.json();
+        console.log('Fallback response templates:', data.templates.length);
+        
+        // Map both templates to their full data
+        const selectedTemplates = data.templates.map((templateData: TemplateResponse) => {
+          console.log('Looking for template number:', templateData.template);
+          console.log('Available templates:', templatesWithIndices.map((t: TemplateWithIndex) => ({
+            index: t.originalIndex,
+            name: t.name
+          })));
+
+          const selectedTemplate = templatesWithIndices.find(
+            (t: TemplateWithIndex) => t.originalIndex === templateData.template
+          );
+          
+          if (!selectedTemplate) {
+            throw new Error(`Could not find template ${templateData.template}`);
+          }
+
+          console.log('Found template:', selectedTemplate.name);
+
+          return {
+            template: selectedTemplate,
+            captions: templateData.captions
+          };
+        });
+
+        console.log('Selected templates:', selectedTemplates.map(t => ({
+          name: t.template.name,
+          captions: t.captions
         })));
 
-        const selectedTemplate = templatesWithIndices.find(
-          (t: TemplateWithIndex) => t.originalIndex === templateData.template
-        );
-        
-        if (!selectedTemplate) {
-          throw new Error(`Could not find template ${templateData.template}`);
-        }
-
-        console.log('Found template:', selectedTemplate.name);
-
-        return {
-          template: selectedTemplate,
-          captions: templateData.captions
-        };
-      });
-
-      console.log('Selected templates:', selectedTemplates.map(t => ({
-        name: t.template.name,
-        captions: t.captions
-      })));
-
-      setMeme({
-        templates: selectedTemplates
-      });
+        setMeme({
+          templates: selectedTemplates
+        });
+      } catch (error) {
+        console.error('Error with fallback endpoint:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to generate meme');
+        setShowInitialForm(true);
+        setIsLoading(false);
+        return; // Exit early on error
+      }
     } catch (error) {
       console.error('Error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to generate meme');

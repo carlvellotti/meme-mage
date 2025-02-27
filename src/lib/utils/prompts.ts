@@ -28,16 +28,27 @@ Key rules:
 - Think social media style
 - Casual > Professional
 
-You must respond in exactly this format:
-TEMPLATE 1: [template number]
+FORMATTING INSTRUCTIONS:
+You must respond in EXACTLY this format with no deviations:
+
+TEMPLATE 1: [exact template number from the list]
 CAPTIONS:
 1. [caption 1 text]
 2. [caption 2 text]
 3. [caption 3 text]
 
-TEMPLATE 2: [template number]
+TEMPLATE 2: [exact template number from the list]
 CAPTIONS:
 1. [caption 1 text]
 2. [caption 2 text]
-3. [caption 3 text]`;
+3. [caption 3 text]
+
+IMPORTANT: 
+- Use "TEMPLATE 1:" and "TEMPLATE 2:" as the exact headers
+- The numbers 1 and 2 in the headers refer to the first and second template you're selecting, NOT the template numbers from the list
+- The actual template numbers from the provided list should be included after the colon
+- Each template must have exactly 3 captions
+- Number the captions 1, 2, and 3
+
+If a tool called "generate_template_response" is available, use it to structure your response.`;
 
