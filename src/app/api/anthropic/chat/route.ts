@@ -60,13 +60,13 @@ export async function POST(req: Request) {
 
     // Get a non-streaming response with multiple captions
     const nonStreamingResponse = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-3-7-sonnet-20250219',
       messages: [{
         role: 'user',
         content: `Given these templates:
 ${lastMessage.content}
 
-Select TWO best templates and write THREE different captions for each.`
+Select TWO best templates that would work well for this meme concept and write THREE different captions for each template.`
       }],
       stream: false,
       max_tokens: 1024,
@@ -81,39 +81,53 @@ Select TWO best templates and write THREE different captions for each.`
     console.log('=== DEBUG: Template Selection ===');
     console.log('Raw AI Response:', content);
     
-    // Updated parsing logic to handle two templates
-    const templates = content.split(/TEMPLATE [12]:/g).filter(Boolean);
+    // Extract template sections using a more reliable regex
+    const templateSections = content.match(/TEMPLATE \d+:[^\n]*(?:\n(?!TEMPLATE \d+:).*)*/g) || [];
+    console.log('Template sections:', templateSections);
     
-    console.log('Split templates:', templates);
-
-    const results = templates.map((template, index) => {
-      // First try to find the template name in the first line
-      const firstLine = template.trim().split('\n')[0];
-      console.log('First line:', firstLine);
-
-      // Find the matching template from our template details
-      const matchingTemplate = templateDetails?.find((t: TemplateDetail) => 
-        firstLine.toLowerCase().includes(t.name.toLowerCase())
-      );
-
-      const templateNumber = matchingTemplate?.number || index + 1;
+    const results = templateSections.map((section) => {
+      // Extract the template number from the section header
+      const templateHeaderMatch = section.match(/TEMPLATE \d+:\s*(\d+)/);
+      const templateNumber = templateHeaderMatch ? parseInt(templateHeaderMatch[1]) : null;
       
-      console.log('Template matching:', {
-        firstLine,
-        matchingTemplate,
-        templateNumber
-      });
-
-      const captions = template
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => /^\d+\.\s*"?.+?"?$/.test(line))
-        .map(line => line.replace(/^\d+\.\s*|"|^\s*|\s*$/g, '').trim());
-
-      return {
-        template: templateNumber,
-        captions: captions.length > 0 ? captions : ['No captions found']
-      };
+      console.log('Extracted template number:', templateNumber);
+      
+      if (!templateNumber) {
+        // Fallback to finding the template by name
+        const firstLine = section.trim().split('\n')[0];
+        console.log('First line:', firstLine);
+        
+        // Find the matching template from our template details
+        const matchingTemplate = templateDetails?.find((t: TemplateDetail) => 
+          firstLine.toLowerCase().includes(t.name.toLowerCase())
+        );
+        
+        console.log('Matching template by name:', matchingTemplate);
+        
+        // Extract captions
+        const captions = section
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => /^\d+\.\s*"?.+?"?$/.test(line))
+          .map(line => line.replace(/^\d+\.\s*|"|^\s*|\s*$/g, '').trim());
+        
+        return {
+          template: matchingTemplate?.number || 0,
+          captions: captions.length > 0 ? captions : ['No captions found']
+        };
+      } else {
+        // Extract captions
+        const captions = section
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => /^\d+\.\s*"?.+?"?$/.test(line))
+          .map(line => line.replace(/^\d+\.\s*|"|^\s*|\s*$/g, '').trim());
+        
+        return {
+          template: templateNumber,
+          captions: captions.length > 0 ? captions : ['No captions found']
+        };
+      }
     });
 
     console.log('Final results:', results);
