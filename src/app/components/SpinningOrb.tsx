@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface SpinningOrbProps {
   width?: number;
@@ -27,7 +27,8 @@ export default function SpinningOrb({
     if (!context) return;
     
     // Configuration
-    const sphereRad = width * 0.4;
+    let sphereRad = width * 0.4;
+    const baseRadius = width * 0.4; // Store the base radius for pulsation
     let radius_sp = 1;
     let particleList: any = {};
     let recycleBin: any = {};
@@ -58,10 +59,41 @@ export default function SpinningOrb({
     let randAccelZ = 0.1;
     let gravity = 0;
     
-    // Color
-    const rgbString = `rgba(${color.r},${color.g},${color.b},`;
+    // Color cycling variables
+    let colorCycleTime = 0;
+    const colorCycleSpeed = 0.01;
+    
+    // Pulsation variables
+    let pulsationAngle = 0;
+    const pulsationSpeed = 0.05;
+    const pulsationAmplitude = 0.15; // 15% size variance
+    
+    // Get random color for particle
+    function getRandomColor(timeOffset: number = 0) {
+      // Use time-based animation for base color cycling
+      const time = colorCycleTime + timeOffset;
+      
+      // Generate vibrant magical colors
+      const r = Math.sin(time * 0.3) * 127 + 128;
+      const g = Math.sin(time * 0.5 + 2) * 127 + 128;
+      const b = Math.sin(time * 0.7 + 4) * 127 + 128;
+      
+      return {
+        r: Math.floor(r),
+        g: Math.floor(g),
+        b: Math.floor(b)
+      };
+    }
     
     function onTimer() {
+      // Update color cycle time
+      colorCycleTime += colorCycleSpeed;
+      
+      // Update pulsation
+      pulsationAngle = (pulsationAngle + pulsationSpeed) % (2 * Math.PI);
+      const pulseFactor = 1 + Math.sin(pulsationAngle) * pulsationAmplitude;
+      sphereRad = baseRadius * pulseFactor;
+      
       // Add new particles if enough time has elapsed
       count++;
       if (count >= wait) {
@@ -98,6 +130,12 @@ export default function SpinningOrb({
           p.accelX = 0;
           p.accelY = gravity;
           p.accelZ = 0;
+          
+          // Assign a unique color to this particle
+          p.color = getRandomColor(Math.random() * 10);
+          
+          // Random size variation
+          p.sizeVariation = 0.8 + Math.random() * 0.4; // 80% to 120% of normal size
         }
       }
       
@@ -172,13 +210,27 @@ export default function SpinningOrb({
               ? 1 
               : (depthAlphaFactor < 0 ? 0 : depthAlphaFactor);
             
-            context.fillStyle = rgbString + depthAlphaFactor * p.alpha + ")";
+            // Use particle's unique color
+            const particleColor = p.color || color;
+            const particleRgbString = `rgba(${particleColor.r},${particleColor.g},${particleColor.b},`;
             
-            // Draw
+            context.fillStyle = particleRgbString + depthAlphaFactor * p.alpha + ")";
+            
+            // Draw with size variation
+            const particleSize = m * particleRad * (p.sizeVariation || 1);
             context.beginPath();
-            context.arc(p.projX, p.projY, m * particleRad, 0, 2 * Math.PI, false);
+            context.arc(p.projX, p.projY, particleSize, 0, 2 * Math.PI, false);
             context.closePath();
             context.fill();
+            
+            // Add a glow effect for some particles
+            if (Math.random() < 0.2) {
+              context.fillStyle = particleRgbString + (depthAlphaFactor * p.alpha * 0.4) + ")";
+              context.beginPath();
+              context.arc(p.projX, p.projY, particleSize * 1.5, 0, 2 * Math.PI, false);
+              context.closePath();
+              context.fill();
+            }
           }
           
           p = nextParticle;

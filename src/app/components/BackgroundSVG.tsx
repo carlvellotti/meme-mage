@@ -20,7 +20,7 @@ const BackgroundSVG: React.FC<BackgroundSVGProps> = ({
           width={width}
           height={height}
           priority
-          className="opacity-20"
+          className="brightness-0"
         />
       </div>
     </div>
