@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { messages } = await req.json();
+    const { messages, model = 'claude-3-7-sonnet-20250219' } = await req.json();
     const lastMessage = messages[messages.length - 1];
     const audience = lastMessage.audience || 'general audience';
 
@@ -92,10 +92,11 @@ export async function POST(req: Request) {
 
     console.log('=== DEBUG: Attempting Tool-Based Template Selection ===');
     console.log('Using system prompt:', systemPrompt.substring(0, 100) + '...');
+    console.log('Using model:', model);
 
     // Get a tool-using response with multiple captions
     const toolResponse = await anthropic.messages.create({
-      model: 'claude-3-7-sonnet-20250219',
+      model: model,
       messages: [{
         role: 'user',
         content: `Given these templates:

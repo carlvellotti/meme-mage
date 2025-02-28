@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { messages } = await req.json();
+    const { messages, model = 'claude-3-7-sonnet-20250219' } = await req.json();
     const lastMessage = messages[messages.length - 1];
     const audience = lastMessage.audience || 'general audience';
 
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
 
     // Get a non-streaming response with multiple captions
     const nonStreamingResponse = await anthropic.messages.create({
-      model: 'claude-3-7-sonnet-20250219',
+      model: model,
       messages: [{
         role: 'user',
         content: `Given these templates:
@@ -80,6 +80,7 @@ Select TWO best templates that would work well for this meme concept and write T
 
     console.log('=== DEBUG: Template Selection ===');
     console.log('Raw AI Response:', content);
+    console.log('Using model:', model);
     
     // Extract template sections using a more reliable regex
     const templateSections = content.match(/TEMPLATE \d+:[^\n]*(?:\n(?!TEMPLATE \d+:).*)*/g) || [];
