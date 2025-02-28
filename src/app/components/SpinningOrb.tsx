@@ -73,15 +73,38 @@ export default function SpinningOrb({
       // Use time-based animation for base color cycling
       const time = colorCycleTime + timeOffset;
       
-      // Generate vibrant magical colors
-      const r = Math.sin(time * 0.3) * 127 + 128;
-      const g = Math.sin(time * 0.5 + 2) * 127 + 128;
-      const b = Math.sin(time * 0.7 + 4) * 127 + 128;
+      // Generate colors focused on green, blue, and purple spectrum
+      // Green ranges (lower r, higher g, low to medium b)
+      // Blue ranges (low r, medium to high g, high b)
+      // Purple ranges (medium to high r, low g, high b)
+      
+      // Base calculation
+      let r, g, b;
+      
+      // Choose between green, blue, or purple
+      const colorType = Math.floor((Math.sin(time * 0.3) + 1) * 1.5); // 0, 1, or 2
+      
+      if (colorType === 0) {
+        // Green shades
+        r = 30 + Math.sin(time * 0.4) * 30;
+        g = 150 + Math.sin(time * 0.5) * 100;
+        b = 80 + Math.sin(time * 0.3) * 70;
+      } else if (colorType === 1) {
+        // Blue shades
+        r = 20 + Math.sin(time * 0.2) * 20;
+        g = 80 + Math.sin(time * 0.5) * 80;
+        b = 180 + Math.sin(time * 0.4) * 75;
+      } else {
+        // Purple shades
+        r = 120 + Math.sin(time * 0.4) * 60;
+        g = 20 + Math.sin(time * 0.3) * 20;
+        b = 180 + Math.sin(time * 0.5) * 75;
+      }
       
       return {
-        r: Math.floor(r),
-        g: Math.floor(g),
-        b: Math.floor(b)
+        r: Math.floor(Math.max(0, Math.min(255, r))),
+        g: Math.floor(Math.max(0, Math.min(255, g))),
+        b: Math.floor(Math.max(0, Math.min(255, b)))
       };
     }
     

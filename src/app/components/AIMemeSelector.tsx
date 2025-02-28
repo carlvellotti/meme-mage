@@ -296,12 +296,12 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 relative">
+      <div className="flex flex-col items-center justify-center py-4 relative">
         <div className="relative">
           <BackgroundSVG width={300} height={300} />
           <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
         </div>
-        <p className="mt-4 text-gray-500">Generating meme options...</p>
+        <p className="mt-2 text-gray-500">Generating meme options...</p>
       </div>
     );
   }

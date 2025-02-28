@@ -290,7 +290,7 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
             <BackgroundSVG width={300} height={300} />
             <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
           </div>
-          <p className="absolute mt-64 text-gray-500">Processing your meme...</p>
+          <p className="absolute mt-48 text-gray-500">Processing your meme...</p>
         </div>
       )}
       

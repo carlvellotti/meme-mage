@@ -13,7 +13,7 @@ const BackgroundSVG: React.FC<BackgroundSVGProps> = ({
 }) => {
   return (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[-1]">
-      <div style={{ transform: 'translateY(60px)' }}>
+      <div style={{ transform: 'translateY(90px)' }}>
         <Image
           src={VectorSVG}
           alt="Background hands"
