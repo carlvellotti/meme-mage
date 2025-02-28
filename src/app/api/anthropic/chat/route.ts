@@ -45,6 +45,16 @@ export async function POST(req: Request) {
     }
 
     const { messages, model = 'claude-3-7-sonnet-20250219' } = await req.json();
+    
+    // Map frontend model IDs to the correct Anthropic model IDs
+    const modelMap: Record<string, string> = {
+      'claude-3-5-sonnet-20240620': 'claude-3-5-sonnet-20241022', // Update to the correct model ID
+      'claude-3-7-sonnet-20250219': 'claude-3-7-sonnet-20250219'
+    };
+    
+    // Use the mapped model ID or fallback to the provided model
+    const anthropicModel = modelMap[model] || model;
+    
     const lastMessage = messages[messages.length - 1];
     const audience = lastMessage.audience || 'general audience';
 
@@ -60,7 +70,7 @@ export async function POST(req: Request) {
 
     // Get a non-streaming response with multiple captions
     const nonStreamingResponse = await anthropic.messages.create({
-      model: model,
+      model: anthropicModel, // Use the mapped model ID
       messages: [{
         role: 'user',
         content: `Given these templates:
@@ -80,7 +90,7 @@ Select TWO best templates that would work well for this meme concept and write T
 
     console.log('=== DEBUG: Template Selection ===');
     console.log('Raw AI Response:', content);
-    console.log('Using model:', model);
+    console.log('Using model:', anthropicModel); // Log the actual model being used
     
     // Extract template sections using a more reliable regex
     const templateSections = content.match(/TEMPLATE \d+:[^\n]*(?:\n(?!TEMPLATE \d+:).*)*/g) || [];
