@@ -13,14 +13,16 @@ const BackgroundSVG: React.FC<BackgroundSVGProps> = ({
 }) => {
   return (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[-1]">
-      <Image
-        src={VectorSVG}
-        alt="Background hands"
-        width={width}
-        height={height}
-        priority
-        className="opacity-20"
-      />
+      <div style={{ transform: 'translateY(60px)' }}>
+        <Image
+          src={VectorSVG}
+          alt="Background hands"
+          width={width}
+          height={height}
+          priority
+          className="opacity-20"
+        />
+      </div>
     </div>
   );
 };
