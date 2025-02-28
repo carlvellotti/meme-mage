@@ -43,7 +43,7 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [audience, setAudience] = useState('');
-  const [selectedModel, setSelectedModel] = useState<'openai' | 'anthropic' | 'anthropic-3-5'>('anthropic');
+  const [selectedModel, setSelectedModel] = useState<'openai' | 'anthropic' | 'anthropic-3-5'>('anthropic-3-5');
   const [meme, setMeme] = useState<SelectedMeme | null>(null);
   const [showInitialForm, setShowInitialForm] = useState(true);
 
@@ -89,7 +89,7 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
       console.log('Greenscreen Mode:', isGreenscreenMode);
       console.log('Templates Count:', templatesWithIndices.length);
       console.log('Selected Model:', selectedModel);
-      console.log('Model ID:', selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20240620' : 'claude-3-7-sonnet-20250219');
+      console.log('Model ID:', selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20241022' : 'claude-3-7-sonnet-20250219');
 
       // Try the tool-based endpoint first
       try {
@@ -147,7 +147,7 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
                 content: `I want to create a meme with this idea: "${prompt}"\n\nAvailable templates:\n${templatesText}`,
                 audience: audience || 'general audience'
               }],
-              model: selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20240620' : 'claude-3-7-sonnet-20250219'
+              model: selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20241022' : 'claude-3-7-sonnet-20250219'
             }),
           });
 
@@ -227,7 +227,7 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
                 content: `I want to create a meme with this idea: "${prompt}"\n\nAvailable templates:\n${templatesText}`,
                 audience: audience || 'general audience'
               }],
-              model: selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20240620' : 'claude-3-7-sonnet-20250219'
+              model: selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20241022' : 'claude-3-7-sonnet-20250219'
             }),
           });
         }
@@ -358,8 +358,8 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
               onChange={(e) => setSelectedModel(e.target.value as 'openai' | 'anthropic' | 'anthropic-3-5')}
               className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
             >
-              <option value="anthropic">Claude 3.7 Sonnet</option>
               <option value="anthropic-3-5">Claude 3.5 Sonnet</option>
+              <option value="anthropic">Claude 3.7 Sonnet</option>
               <option value="openai">GPT-4</option>
             </select>
           </div>
