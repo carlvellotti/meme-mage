@@ -16,6 +16,7 @@ import { createMemePreview } from '@/lib/utils/previewGenerator';
 import AIMemeSelector from './AIMemeSelector';
 import ImagePicker from '@/app/components/ImagePicker';
 import SpinningOrb from './SpinningOrb';
+import BackgroundSVG from './BackgroundSVG';
 
 // Import or define the SelectedMeme interface
 interface SelectedMeme {
@@ -282,8 +283,24 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
   };
 
   return (
-    <div className="space-y-8">
-      {selectedTemplate ? (
+    <div className="relative space-y-8">
+      {isDownloading && (
+        <div className="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-50">
+          <div className="relative">
+            <BackgroundSVG width={300} height={300} />
+            <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
+          </div>
+          <p className="absolute mt-64 text-gray-500">Processing your meme...</p>
+        </div>
+      )}
+      
+      {!selectedTemplate ? (
+        <AIMemeSelector 
+          onSelectTemplate={handleAISelection} 
+          isGreenscreenMode={isGreenscreenMode}
+          onToggleMode={onToggleMode}
+        />
+      ) : (
         // Phase 3: Selected template with editor and other options
         <>
           <div className="border rounded-lg p-4 bg-white">
@@ -800,13 +817,6 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
             </div>
           )}
         </>
-      ) : (
-        // Phase 1 & 2: Initial form or generated options
-        <AIMemeSelector 
-          onSelectTemplate={handleAISelection} 
-          isGreenscreenMode={isGreenscreenMode}
-          onToggleMode={onToggleMode}
-        />
       )}
 
       <ImagePicker
