@@ -661,7 +661,7 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
                             <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1.5">
                               Photo by{' '}
                               <a 
-                                href={`https://unsplash.com/photos/${selectedBackground.id}?utm_source=meme_generator&utm_medium=referral`}
+                                href={`https://unsplash.com/photos/${selectedBackground.id}?utm_source=meme_mage&utm_medium=referral`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-white underline"
@@ -670,7 +670,7 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
                               </a>
                               {' '}on{' '}
                               <a
-                                href="https://unsplash.com/?utm_source=meme_generator&utm_medium=referral"
+                                href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-white underline"
@@ -750,7 +750,7 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
                   <div className="text-xs text-gray-500 mt-1.5">
                     Background by{' '}
                     <a 
-                      href={`https://unsplash.com/photos/${selectedBackground.id}?utm_source=meme_generator&utm_medium=referral`}
+                      href={`https://unsplash.com/photos/${selectedBackground.id}?utm_source=meme_mage&utm_medium=referral`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-gray-500 underline"
@@ -759,7 +759,7 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
                     </a>
                     {' '}on{' '}
                     <a
-                      href="https://unsplash.com/?utm_source=meme_generator&utm_medium=referral"
+                      href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-gray-500 underline"

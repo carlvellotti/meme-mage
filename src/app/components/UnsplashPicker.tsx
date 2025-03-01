@@ -160,7 +160,7 @@ export default function UnsplashPicker({ onSelect, onClose, isOpen }: UnsplashPi
                 />
                 <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1.5">
                   <a 
-                    href={`${image.links.html}?utm_source=meme_generator&utm_medium=referral`}
+                    href={`${image.links.html}?utm_source=meme_mage&utm_medium=referral`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-white hover:underline"
@@ -170,7 +170,7 @@ export default function UnsplashPicker({ onSelect, onClose, isOpen }: UnsplashPi
                   </a>
                   {' '}by{' '}
                   <a 
-                    href={`https://unsplash.com/@${image.user.username}?utm_source=meme_generator&utm_medium=referral`}
+                    href={`https://unsplash.com/@${image.user.username}?utm_source=meme_mage&utm_medium=referral`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-white hover:underline"
@@ -180,7 +180,7 @@ export default function UnsplashPicker({ onSelect, onClose, isOpen }: UnsplashPi
                   </a>
                   {' '}on{' '}
                   <a
-                    href="https://unsplash.com/?utm_source=meme_generator&utm_medium=referral"
+                    href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-white hover:underline"
