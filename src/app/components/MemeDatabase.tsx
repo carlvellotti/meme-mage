@@ -1,80 +1,19 @@
 'use client';
 
-import { useState } from 'react';
 import TemplateBrowser from './TemplateBrowser';
 import { MemeTemplate } from '@/lib/supabase/types';
-import MemeGenerator from './MemeGenerator';
-
-interface SelectedMeme {
-  templates: {
-    template: MemeTemplate;
-    captions: string[];
-  }[];
-  selectedTemplate?: MemeTemplate;
-  selectedCaption?: string;
-}
 
 export default function MemeDatabase() {
-  const [selectedTemplate, setSelectedTemplate] = useState<MemeTemplate | null>(null);
-  const [isGreenscreenMode, setIsGreenscreenMode] = useState(false);
-  const [selectedCaption, setSelectedCaption] = useState<string | null>(null);
-  const [generatedOptions, setGeneratedOptions] = useState<SelectedMeme | null>(null);
-  
+  // This is now just a placeholder function since we're navigating directly to template pages
   const handleSelectTemplate = (template: MemeTemplate) => {
-    setSelectedTemplate(template);
+    // No longer needed, but kept for compatibility with TemplateBrowser props
+    console.log('Template selected:', template.name);
   };
-  
-  const handleBack = () => {
-    setSelectedTemplate(null);
-    setSelectedCaption(null);
-    setGeneratedOptions(null);
-  };
-  
-  const handleToggleMode = () => {
-    setIsGreenscreenMode(!isGreenscreenMode);
-  };
-
-  const handleCreateFromTemplate = (template: MemeTemplate, caption: string, allOptions: SelectedMeme) => {
-    setSelectedTemplate(template);
-    setSelectedCaption(caption);
-    setGeneratedOptions(allOptions);
-  };
-
-  // Custom handler for MemeGenerator to handle the back action
-  const handleMemeGeneratorBack = () => {
-    setSelectedCaption(null);
-  };
-
-  if (selectedTemplate && selectedCaption && generatedOptions) {
-    return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <button 
-          onClick={handleBack}
-          className="mb-4 px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300"
-        >
-          Back to Templates
-        </button>
-        <div className="mt-4">
-          <MemeGenerator 
-            isGreenscreenMode={isGreenscreenMode} 
-            onToggleMode={handleToggleMode}
-            initialTemplate={selectedTemplate}
-            initialCaption={selectedCaption}
-            initialOptions={generatedOptions}
-            onBack={handleMemeGeneratorBack}
-          />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <TemplateBrowser 
         onSelectTemplate={handleSelectTemplate}
-        onCreateFromTemplate={handleCreateFromTemplate}
-        isGreenscreenMode={isGreenscreenMode}
-        onToggleMode={handleToggleMode}
       />
     </div>
   );

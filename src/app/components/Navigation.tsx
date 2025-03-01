@@ -14,7 +14,13 @@ export default function Navigation() {
     { path: '/upload', label: 'Upload Template' },
   ];
 
-  const currentPage = routes.find(route => route.path === pathname)?.label || 'Home';
+  // Check if the current path is a template-specific page
+  const isTemplatePage = pathname.startsWith('/template/');
+  
+  // If on a template page, show "Template Library" as the current page in mobile view
+  const currentPage = isTemplatePage 
+    ? 'Template Library' 
+    : (routes.find(route => route.path === pathname)?.label || 'Home');
 
   return (
     <nav className="border-b">
@@ -30,11 +36,11 @@ export default function Navigation() {
               key={route.path}
               href={route.path}
               className={`relative py-2 text-sm font-medium transition-colors
-                ${pathname === route.path 
+                ${(pathname === route.path || (isTemplatePage && route.path === '/template-library'))
                   ? 'text-blue-600' 
                   : 'text-gray-600 hover:text-gray-900'
                 }
-                ${pathname === route.path 
+                ${(pathname === route.path || (isTemplatePage && route.path === '/template-library'))
                   ? 'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-blue-600' 
                   : ''
                 }
@@ -75,7 +81,7 @@ export default function Navigation() {
                   key={route.path}
                   href={route.path}
                   className={`block px-4 py-2 text-sm ${
-                    pathname === route.path
+                    (pathname === route.path || (isTemplatePage && route.path === '/template-library'))
                       ? 'bg-gray-100 text-gray-900 font-medium'
                       : 'text-gray-600 hover:bg-gray-50'
                   }`}
