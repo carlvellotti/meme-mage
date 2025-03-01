@@ -9,6 +9,8 @@ export async function PUT(
     const { instructions } = await request.json();
     const { id } = params;
     
+    console.log('Updating template instructions:', { id, instructions });
+    
     // Update the template instructions in the database
     const { data, error } = await supabaseAdmin
       .from('meme_templates')
@@ -17,7 +19,10 @@ export async function PUT(
       .select()
       .single();
       
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
+    }
     
     return NextResponse.json({ success: true, data });
   } catch (error) {

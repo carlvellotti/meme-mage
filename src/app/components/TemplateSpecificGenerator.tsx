@@ -197,6 +197,9 @@ export default function TemplateSpecificGenerator({
   const saveInstructions = async () => {
     setIsSavingInstructions(true);
     try {
+      console.log('Saving instructions for template:', template.id);
+      console.log('Instructions content:', instructions);
+      
       const response = await fetch(`/api/templates/${template.id}/update-instructions`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -204,12 +207,18 @@ export default function TemplateSpecificGenerator({
       });
       
       if (!response.ok) {
-        throw new Error('Failed to update instructions');
+        const errorData = await response.json().catch(() => null);
+        console.error('Error response:', response.status, errorData);
+        throw new Error(`Failed to update instructions: ${response.status} ${response.statusText}`);
       }
+      
+      const data = await response.json();
+      console.log('Update successful:', data);
       
       toast.success('Template instructions updated');
       setIsEditingInstructions(false);
     } catch (error) {
+      console.error('Error saving instructions:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to update instructions');
     } finally {
       setIsSavingInstructions(false);
