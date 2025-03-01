@@ -123,28 +123,30 @@ export default function TemplateBrowser({
               {template.name}
             </h3>
             
-            {/* Video container */}
+            {/* Video container with improved transition */}
             <div 
               className="relative overflow-hidden rounded"
               style={{
-                maxHeight: isHovered ? '1000px' : '180px', // Expand downward with animation
-                transitionProperty: 'max-height',
-                transitionDuration: '500ms',
-                transitionTimingFunction: 'ease-in-out'
+                maxHeight: isHovered ? '1000px' : '180px',
+                transition: 'max-height 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
+                willChange: 'max-height'
               }}
             >
-              <video
-                src={template.video_url}
-                className={`rounded w-full ${
-                  isHovered ? 'object-contain' : 'object-cover h-full'
-                }`}
-                style={{
-                  aspectRatio: isHovered ? 'auto' : '16/9',
-                  transition: 'all 0.5s ease-in-out',
-                }}
-                controls
-                onClick={(e) => e.stopPropagation()} // Allow video controls to work without navigating
-              />
+              <div className="video-wrapper">
+                <video
+                  src={template.video_url}
+                  className={`rounded w-full ${
+                    isHovered ? 'object-contain' : 'object-cover h-full'
+                  }`}
+                  style={{
+                    aspectRatio: isHovered ? 'auto' : '16/9',
+                    transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                  controls
+                  onClick={(e) => e.stopPropagation()} // Allow video controls to work without navigating
+                  preload="metadata"
+                />
+              </div>
             </div>
           </div>
         );
