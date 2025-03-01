@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { MemeTemplate } from '@/lib/supabase/types';
-import TemplateSpecificGenerator from './TemplateSpecificGenerator';
+import Link from 'next/link';
+import { nameToSlug } from '@/lib/utils/slugUtils';
+import { useRouter } from 'next/navigation';
 
 interface Props {
   onSelectTemplate: (template: MemeTemplate) => void;
@@ -20,7 +22,7 @@ export default function TemplateBrowser({
   const [templates, setTemplates] = useState<MemeTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTemplate, setSelectedTemplate] = useState<MemeTemplate | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -41,25 +43,9 @@ export default function TemplateBrowser({
     fetchTemplates();
   }, []);
 
-  const handleCreateClick = (template: MemeTemplate, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent triggering the card click
-    setSelectedTemplate(template);
+  const handleCardClick = (template: MemeTemplate) => {
+    router.push(`/template/${nameToSlug(template.name)}`);
   };
-
-  const handleBack = () => {
-    setSelectedTemplate(null);
-  };
-
-  if (selectedTemplate) {
-    return (
-      <TemplateSpecificGenerator 
-        template={selectedTemplate} 
-        onBack={handleBack}
-        onSelectTemplate={onCreateFromTemplate || onSelectTemplate}
-        isGreenscreenMode={isGreenscreenMode}
-      />
-    );
-  }
 
   if (isLoading) return <div>Loading templates...</div>;
   if (error) return <div>Error: {error}</div>;
@@ -69,21 +55,18 @@ export default function TemplateBrowser({
       {templates.map((template) => (
         <div
           key={template.id}
-          className="border rounded-lg p-4 cursor-pointer hover:border-blue-500 relative"
-          onClick={() => onSelectTemplate(template)}
+          className="border rounded-lg p-4 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all"
+          onClick={() => handleCardClick(template)}
         >
-          <button 
-            className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded-md text-sm z-10"
-            onClick={(e) => handleCreateClick(template, e)}
-          >
-            Create
-          </button>
-          <video
-            src={template.video_url}
-            className="w-full aspect-video object-cover rounded mb-2"
-            controls
-          />
-          <h3 className="font-medium">{template.name}</h3>
+          <h3 className="font-medium text-lg mb-3">{template.name}</h3>
+          <div className="relative">
+            <video
+              src={template.video_url}
+              className="w-full aspect-video object-cover rounded mb-2"
+              controls
+              onClick={(e) => e.stopPropagation()} // Allow video controls to work without navigating
+            />
+          </div>
         </div>
       ))}
     </div>

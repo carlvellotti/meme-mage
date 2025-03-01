@@ -7,6 +7,7 @@ export default function TemplateLibrary() {
         <h1 className="text-3xl font-bold mb-4">Template Library</h1>
         <p className="text-gray-600 mb-8">
           Browse our collection of meme templates. Each template includes usage instructions and example captions.
+          Click on any template to open its dedicated page where you can create a meme with that template.
         </p>
         <MemeDatabase />
       </div>
