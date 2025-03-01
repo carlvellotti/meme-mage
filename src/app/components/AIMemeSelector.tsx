@@ -5,6 +5,7 @@ import { MemeTemplate } from '@/lib/supabase/types';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
 import SpinningOrb from './SpinningOrb';
+import BackgroundSVG from './BackgroundSVG';
 
 interface AIMemeSelector {
   onSelectTemplate: (template: MemeTemplate, caption: string, allOptions: SelectedMeme) => void;
@@ -295,9 +296,14 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
-        <p className="mt-4 text-gray-500">Generating meme options...</p>
+      <div className="flex flex-col items-center justify-center py-2 relative">
+        <div className="relative">
+          <BackgroundSVG width={300} height={300} />
+          <div style={{ marginTop: '-30px' }}>
+            <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
+          </div>
+        </div>
+        <p className="mt-24 text-gray-500">Conjuring memes...</p>
       </div>
     );
   }
