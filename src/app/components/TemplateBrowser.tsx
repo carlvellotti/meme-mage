@@ -125,10 +125,12 @@ export default function TemplateBrowser({
             
             {/* Video container */}
             <div 
-              className="relative overflow-hidden rounded transition-all duration-500"
+              className="relative overflow-hidden rounded"
               style={{
                 maxHeight: isHovered ? '1000px' : '180px', // Expand downward with animation
                 transitionProperty: 'max-height',
+                transitionDuration: '500ms',
+                transitionTimingFunction: 'ease-in-out'
               }}
             >
               <video
@@ -138,7 +140,7 @@ export default function TemplateBrowser({
                 }`}
                 style={{
                   aspectRatio: isHovered ? 'auto' : '16/9',
-                  transition: 'all 0.5s ease',
+                  transition: 'all 0.5s ease-in-out',
                 }}
                 controls
                 onClick={(e) => e.stopPropagation()} // Allow video controls to work without navigating
