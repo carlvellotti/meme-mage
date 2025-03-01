@@ -40,7 +40,12 @@ export default function MemeDatabase() {
     setGeneratedOptions(allOptions);
   };
 
-  if (selectedTemplate && selectedCaption) {
+  // Custom handler for MemeGenerator to handle the back action
+  const handleMemeGeneratorBack = () => {
+    setSelectedCaption(null);
+  };
+
+  if (selectedTemplate && selectedCaption && generatedOptions) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
         <button 
@@ -52,7 +57,11 @@ export default function MemeDatabase() {
         <div className="mt-4">
           <MemeGenerator 
             isGreenscreenMode={isGreenscreenMode} 
-            onToggleMode={handleToggleMode} 
+            onToggleMode={handleToggleMode}
+            initialTemplate={selectedTemplate}
+            initialCaption={selectedCaption}
+            initialOptions={generatedOptions}
+            onBack={handleMemeGeneratorBack}
           />
         </div>
       </div>

@@ -186,7 +186,9 @@ export default function TemplateSpecificGenerator({
       templates: [{
         template: template,
         captions: generatedCaptions
-      }]
+      }],
+      selectedTemplate: template,
+      selectedCaption: caption
     };
     
     onSelectTemplate(template, caption, selectedMeme);

@@ -34,6 +34,10 @@ interface TemplateData {
 interface MemeGeneratorProps {
   isGreenscreenMode: boolean;
   onToggleMode: () => void;
+  initialTemplate?: MemeTemplate;
+  initialCaption?: string;
+  initialOptions?: SelectedMeme;
+  onBack?: () => void;
 }
 
 // Add this interface near the top with other interfaces
@@ -59,11 +63,18 @@ interface UnsplashImage {
   };
 }
 
-export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeGeneratorProps) {
-  const [selectedTemplate, setSelectedTemplate] = useState<MemeTemplate | null>(null);
-  const [caption, setCaption] = useState<string>('');
+export default function MemeGenerator({ 
+  isGreenscreenMode, 
+  onToggleMode, 
+  initialTemplate, 
+  initialCaption, 
+  initialOptions,
+  onBack
+}: MemeGeneratorProps) {
+  const [selectedTemplate, setSelectedTemplate] = useState<MemeTemplate | null>(initialTemplate || null);
+  const [caption, setCaption] = useState<string>(initialCaption || '');
   const [isDownloading, setIsDownloading] = useState(false);
-  const [generatedOptions, setGeneratedOptions] = useState<SelectedMeme | null>(null);
+  const [generatedOptions, setGeneratedOptions] = useState<SelectedMeme | null>(initialOptions || null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
   const [selectedBackground, setSelectedBackground] = useState<BackgroundImage | null>(null);
   const [backgrounds, setBackgrounds] = useState<BackgroundImage[]>([]);
@@ -125,6 +136,13 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
     }
   }, [selectedTemplate, caption, selectedBackground, isGreenscreenMode, textSettings, labels, labelSettings]);
 
+  // Initialize preview when component mounts with initial values
+  useEffect(() => {
+    if (initialTemplate && initialCaption) {
+      updatePreview();
+    }
+  }, []);
+
   const handleAISelection = (template: MemeTemplate, aiCaption: string, allOptions: SelectedMeme) => {
     setSelectedTemplate(template);
     setCaption(aiCaption);
@@ -132,8 +150,12 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
   };
 
   const handleBack = () => {
-    setSelectedTemplate(null);
-    setCaption('');
+    if (onBack) {
+      onBack();
+    } else {
+      setSelectedTemplate(null);
+      setCaption('');
+    }
   };
 
   const handleDownloadMeme = async () => {
