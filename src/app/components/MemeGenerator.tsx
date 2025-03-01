@@ -292,7 +292,7 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
               <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
             </div>
           </div>
-          <p className="mt-12 text-gray-500">Conjuring your meme...</p>
+          <p className="mt-24 text-gray-500">Conjuring your meme...</p>
         </div>
       )}
       
