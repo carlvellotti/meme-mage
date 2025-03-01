@@ -285,12 +285,14 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
   return (
     <div className="relative space-y-8">
       {isDownloading && (
-        <div className="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-50 flex-col">
           <div className="relative">
             <BackgroundSVG width={300} height={300} />
-            <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
+            <div style={{ marginTop: '-30px' }}>
+              <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
+            </div>
           </div>
-          <p className="absolute mt-48 text-gray-500">Processing your meme...</p>
+          <p className="mt-12 text-gray-500">Conjuring your meme...</p>
         </div>
       )}
       

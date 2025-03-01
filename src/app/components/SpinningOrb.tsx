@@ -81,8 +81,9 @@ export default function SpinningOrb({
       // Base calculation
       let r, g, b;
       
-      // Choose between green, blue, or purple
-      const colorType = Math.floor((Math.sin(time * 0.3) + 1) * 1.5); // 0, 1, or 2
+      // Choose between green, blue, pure blue, or purple
+      // Add extra weight to the pure blue option
+      const colorType = Math.floor((Math.sin(time * 0.3) + 1) * 1.75); // 0, 1, 2, or 3
       
       if (colorType === 0) {
         // Green shades
@@ -94,6 +95,11 @@ export default function SpinningOrb({
         r = 20 + Math.sin(time * 0.2) * 20;
         g = 80 + Math.sin(time * 0.5) * 80;
         b = 180 + Math.sin(time * 0.4) * 75;
+      } else if (colorType === 2) {
+        // Pure blue shades - more vibrant blues
+        r = 10 + Math.sin(time * 0.2) * 10;
+        g = 50 + Math.sin(time * 0.3) * 50;
+        b = 230 + Math.sin(time * 0.2) * 25; // Higher base blue value with less variation
       } else {
         // Purple shades
         r = 120 + Math.sin(time * 0.4) * 60;
