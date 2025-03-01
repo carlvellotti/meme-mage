@@ -3,20 +3,9 @@
 import { useState, useEffect } from 'react';
 import { MemeTemplate } from '@/lib/supabase/types';
 import Link from 'next/link';
+import { toast } from 'react-hot-toast';
 
-interface Props {
-  onSelectTemplate: (template: MemeTemplate) => void;
-  onCreateFromTemplate?: (template: MemeTemplate, caption: string, allOptions: any) => void;
-  isGreenscreenMode?: boolean;
-  onToggleMode?: () => void;
-}
-
-export default function TemplateBrowser({ 
-  onSelectTemplate, 
-  onCreateFromTemplate,
-  isGreenscreenMode = false,
-  onToggleMode
-}: Props) {
+export default function TemplatesPage() {
   const [templates, setTemplates] = useState<MemeTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,32 +45,37 @@ export default function TemplateBrowser({
     fetchTemplates();
   }, [refreshKey]);
 
-  if (isLoading) return <div>Loading templates...</div>;
-  if (error) return <div>Error: {error}</div>;
+  if (isLoading) return <div className="p-8">Loading templates...</div>;
+  if (error) return <div className="p-8">Error: {error}</div>;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-      {templates.map((template) => (
-        <div
-          key={template.id}
-          className="border rounded-lg p-4 cursor-pointer hover:border-blue-500 relative"
-          onClick={() => onSelectTemplate(template)}
+    <div className="container mx-auto p-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Meme Templates</h1>
+        <button 
+          onClick={refreshTemplates}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
-          <Link 
+          Refresh
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        {templates.map((template) => (
+          <Link
+            key={template.id}
             href={`/templates/${template.id}`}
-            className="absolute top-2 right-2 bg-blue-600 text-white px-3 py-1 rounded-md text-sm z-10"
-            onClick={(e) => e.stopPropagation()}
+            className="border rounded-lg p-4 cursor-pointer hover:border-blue-500 relative"
           >
-            Create
+            <video
+              src={template.video_url}
+              className="w-full aspect-video object-cover rounded mb-2"
+              controls
+            />
+            <h3 className="font-medium">{template.name}</h3>
           </Link>
-          <video
-            src={template.video_url}
-            className="w-full aspect-video object-cover rounded mb-2"
-            controls
-          />
-          <h3 className="font-medium">{template.name}</h3>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 } 

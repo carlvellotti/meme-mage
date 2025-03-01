@@ -10,6 +10,7 @@ export default function Navigation() {
 
   const routes = [
     { path: '/', label: 'Home' },
+    { path: '/templates', label: 'Templates' },
     { path: '/template-library', label: 'Template Library' },
     { path: '/upload', label: 'Upload Template' },
   ];
