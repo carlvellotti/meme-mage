@@ -37,7 +37,7 @@ Key rules:
 - Never put any part of the caption in quotes ("" or '') 
 - Treat user inputs loosely – It's MUCH more important to come up with a good meme than follow the user's input exactly
 - Remember the videos ARE the punchline
-- These are CAPTIONS that accompany a meme video, not a joke on their own
+- These are CAPTIONS that accompany a meme video, not a joke on their own. Never quote or reference the template's original language directly in your caption.
 
 For example:
 INPUT:
