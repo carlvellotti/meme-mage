@@ -202,7 +202,11 @@ export default function TemplateSpecificGenerator({
       
       const response = await fetch(`/api/templates/${template.id}/update-instructions`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
         body: JSON.stringify({ instructions }),
       });
       
@@ -214,6 +218,25 @@ export default function TemplateSpecificGenerator({
       
       const data = await response.json();
       console.log('Update successful:', data);
+      
+      // Fetch the latest template data to ensure we have the most up-to-date version
+      const refreshResponse = await fetch(`/api/templates/${template.id}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (refreshResponse.ok) {
+        const refreshedTemplate = await refreshResponse.json();
+        // Update the template prop with the refreshed data
+        template.instructions = refreshedTemplate.instructions;
+        console.log('Template refreshed with latest data:', refreshedTemplate);
+      } else {
+        console.warn('Failed to refresh template data after update');
+      }
       
       toast.success('Template instructions updated');
       setIsEditingInstructions(false);

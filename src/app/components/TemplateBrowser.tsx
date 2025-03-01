@@ -21,32 +21,49 @@ export default function TemplateBrowser({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<MemeTemplate | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const fetchTemplates = async () => {
+    setIsLoading(true);
+    try {
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/templates?t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        next: { revalidate: 0 }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch templates');
+      }
+      const data = await response.json();
+      console.log('Fetched templates:', data.length);
+      setTemplates(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load templates');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshTemplates = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   useEffect(() => {
-    const fetchTemplates = async () => {
-      try {
-        const response = await fetch('/api/templates');
-        if (!response.ok) {
-          throw new Error('Failed to fetch templates');
-        }
-        const data = await response.json();
-        setTemplates(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load templates');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchTemplates();
-  }, []);
+  }, [refreshKey]);
 
   const handleCreateClick = (template: MemeTemplate, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent triggering the card click
+    e.stopPropagation();
     setSelectedTemplate(template);
   };
 
   const handleBack = () => {
+    refreshTemplates();
     setSelectedTemplate(null);
   };
 

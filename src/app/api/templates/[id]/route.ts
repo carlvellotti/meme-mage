@@ -1,10 +1,15 @@
 import { supabase } from '@/lib/supabase/client';
 
+export const dynamic = 'force-dynamic'; // Disable static optimization
+export const fetchCache = 'force-no-store'; // Disable fetch caching
+export const revalidate = 0; // Disable revalidation
+
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    console.log('Fetching template by ID:', params.id);
     const { data, error } = await supabase
       .from('meme_templates')
       .select('*')
@@ -17,6 +22,9 @@ export async function GET(
         status: 404,
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, max-age=0, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
       });
     }
@@ -24,6 +32,9 @@ export async function GET(
     return new Response(JSON.stringify(data), {
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, max-age=0, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       },
     });
   } catch (error) {
@@ -34,6 +45,9 @@ export async function GET(
         status: 500,
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, max-age=0, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
       }
     );
