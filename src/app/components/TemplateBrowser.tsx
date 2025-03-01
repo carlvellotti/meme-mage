@@ -103,10 +103,15 @@ export default function TemplateBrowser({
             key={template.id}
             className={`border rounded-lg p-4 cursor-pointer transition-all duration-300 ${
               isHovered 
-                ? 'border-blue-500 shadow-lg z-10 bg-white scale-105 md:scale-110' 
+                ? 'border-blue-500 shadow-lg z-10 bg-white' 
                 : 'hover:border-blue-500 hover:shadow-md'
             }`}
-            onClick={isHovered ? undefined : () => handleCardClick(template)}
+            onClick={(e) => {
+              // Only navigate if the click wasn't on the video
+              if (!(e.target as HTMLElement).closest('video')) {
+                handleCardClick(template);
+              }
+            }}
             onMouseEnter={() => handleMouseEnter(template.id)}
             onMouseLeave={handleMouseLeave}
           >
@@ -119,42 +124,26 @@ export default function TemplateBrowser({
             </h3>
             
             {/* Video container */}
-            <div className={`relative overflow-hidden rounded transition-all duration-300 ${
-              isHovered ? 'aspect-auto' : 'aspect-video'
-            }`}>
+            <div 
+              className="relative overflow-hidden rounded transition-all duration-500"
+              style={{
+                maxHeight: isHovered ? '1000px' : '180px', // Expand downward with animation
+                transitionProperty: 'max-height',
+              }}
+            >
               <video
                 src={template.video_url}
-                className={`rounded ${
-                  isHovered ? 'w-full object-contain' : 'w-full h-full object-cover'
+                className={`rounded w-full ${
+                  isHovered ? 'object-contain' : 'object-cover h-full'
                 }`}
+                style={{
+                  aspectRatio: isHovered ? 'auto' : '16/9',
+                  transition: 'all 0.5s ease',
+                }}
                 controls
                 onClick={(e) => e.stopPropagation()} // Allow video controls to work without navigating
               />
             </div>
-            
-            {/* Close button when expanded */}
-            {isHovered && (
-              <div className="mt-3 flex justify-end">
-                <button
-                  className="px-3 py-1 bg-gray-200 rounded text-sm hover:bg-gray-300"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setHoveredTemplate(null);
-                  }}
-                >
-                  Close
-                </button>
-                <button
-                  className="ml-2 px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCardClick(template);
-                  }}
-                >
-                  Create Meme
-                </button>
-              </div>
-            )}
           </div>
         );
       })}
