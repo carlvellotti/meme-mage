@@ -20,7 +20,7 @@ export default function Navigation() {
     <nav className="border-b">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between max-w-6xl">
         <Link href="/" className="text-2xl font-bold">
-          Meme Generator
+          Meme Mage
         </Link>
 
         {/* Desktop Navigation */}

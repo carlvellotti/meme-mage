@@ -1,4 +1,4 @@
-# Meme Generator Documentation
+# Meme Mage Documentation
 
 ## System Overview
 
@@ -142,7 +142,7 @@ interface LabelSettings {
   - Pagination support with "Load More"
   - Required attribution format:
     ```html
-    Photo by <a href="https://unsplash.com/@username?utm_source=meme_generator&utm_medium=referral">Name</a> on <a href="https://unsplash.com/?utm_source=meme_generator&utm_medium=referral">Unsplash</a>
+    Photo by <a href="https://unsplash.com/@username?utm_source=meme_mage&utm_medium=referral">Name</a> on <a href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral">Unsplash</a>
     ```
   - Download tracking via Unsplash API
   - UTM parameters for proper referral tracking
