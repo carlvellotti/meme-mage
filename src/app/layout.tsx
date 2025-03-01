@@ -10,16 +10,13 @@ export const metadata: Metadata = {
   title: 'Meme Mage',
   description: 'Generate memes with AI',
   icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { 
-        url: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="90">🧙‍♂️</text></svg>',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: [
-      { url: '/apple-icon.png', sizes: '180x180', type: 'image/png' },
-    ],
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+    other: {
+      rel: 'icon',
+      url: '/favicon.png',
+    },
   },
 };
 
