@@ -1,60 +1,81 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
+import { useState } from 'react';
+import TemplateBrowser from './TemplateBrowser';
 import { MemeTemplate } from '@/lib/supabase/types';
+import MemeGenerator from './MemeGenerator';
+
+interface SelectedMeme {
+  templates: {
+    template: MemeTemplate;
+    captions: string[];
+  }[];
+  selectedTemplate?: MemeTemplate;
+  selectedCaption?: string;
+}
 
 export default function MemeDatabase() {
-  const [templates, setTemplates] = useState<MemeTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [selectedTemplate, setSelectedTemplate] = useState<MemeTemplate | null>(null);
+  const [isGreenscreenMode, setIsGreenscreenMode] = useState(false);
+  const [selectedCaption, setSelectedCaption] = useState<string | null>(null);
+  const [generatedOptions, setGeneratedOptions] = useState<SelectedMeme | null>(null);
+  
+  const handleSelectTemplate = (template: MemeTemplate) => {
+    setSelectedTemplate(template);
+  };
+  
+  const handleBack = () => {
+    setSelectedTemplate(null);
+    setSelectedCaption(null);
+    setGeneratedOptions(null);
+  };
+  
+  const handleToggleMode = () => {
+    setIsGreenscreenMode(!isGreenscreenMode);
+  };
 
-  useEffect(() => {
-    async function loadTemplates() {
-      try {
-        const { data, error } = await supabase
-          .from('meme_templates')
-          .select('*')
-          .order('created_at', { ascending: false });
+  const handleCreateFromTemplate = (template: MemeTemplate, caption: string, allOptions: SelectedMeme) => {
+    setSelectedTemplate(template);
+    setSelectedCaption(caption);
+    setGeneratedOptions(allOptions);
+  };
 
-        if (error) throw error;
-        if (data) setTemplates(data);
-      } catch (error) {
-        console.error('Error loading templates:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
+  // Custom handler for MemeGenerator to handle the back action
+  const handleMemeGeneratorBack = () => {
+    setSelectedCaption(null);
+  };
 
-    loadTemplates();
-  }, []);
-
-  if (loading) {
+  if (selectedTemplate && selectedCaption && generatedOptions) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
-        <p className="text-gray-600">Loading templates...</p>
+        <button 
+          onClick={handleBack}
+          className="mb-4 px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300"
+        >
+          Back to Templates
+        </button>
+        <div className="mt-4">
+          <MemeGenerator 
+            isGreenscreenMode={isGreenscreenMode} 
+            onToggleMode={handleToggleMode}
+            initialTemplate={selectedTemplate}
+            initialCaption={selectedCaption}
+            initialOptions={generatedOptions}
+            onBack={handleMemeGeneratorBack}
+          />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      {templates.length === 0 ? (
-        <p className="text-gray-600">No templates in database yet</p>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {templates.map((template) => (
-            <div key={template.id} className="border rounded p-4">
-              <h3 className="font-bold text-gray-900">{template.name}</h3>
-              <video
-                src={template.video_url}
-                className="w-full mt-2 aspect-video object-cover"
-                controls
-              />
-              <p className="text-gray-600 mt-2 line-clamp-2">{template.instructions}</p>
-            </div>
-          ))}
-        </div>
-      )}
+      <TemplateBrowser 
+        onSelectTemplate={handleSelectTemplate}
+        onCreateFromTemplate={handleCreateFromTemplate}
+        isGreenscreenMode={isGreenscreenMode}
+        onToggleMode={handleToggleMode}
+      />
     </div>
   );
 } 
