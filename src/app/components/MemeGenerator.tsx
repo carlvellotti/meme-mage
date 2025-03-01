@@ -282,6 +282,12 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
     })));
   };
 
+  const handleCreateFromTemplate = (template: MemeTemplate, aiCaption: string, allOptions: SelectedMeme) => {
+    setSelectedTemplate(template);
+    setCaption(aiCaption);
+    setGeneratedOptions(allOptions);
+  };
+
   return (
     <div className="relative space-y-8">
       {isDownloading && (
@@ -303,8 +309,44 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
           onToggleMode={onToggleMode}
         />
       ) : (
-        // Phase 3: Selected template with editor and other options
-        <>
+        <div className="space-y-6">
+          {/* Back button */}
+          <div className="flex justify-between items-center">
+            <button 
+              onClick={handleBack} 
+              className="flex items-center text-blue-600 hover:text-blue-800"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+              </svg>
+              Back
+            </button>
+            
+            {/* Download button */}
+            <button
+              onClick={handleDownloadMeme}
+              disabled={isDownloading || !caption.trim() || (isGreenscreenMode && !selectedBackground)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center"
+            >
+              {isDownloading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  Download Meme
+                </>
+              )}
+            </button>
+          </div>
+
           <div className="border rounded-lg p-4 bg-white">
             <div className="flex flex-col lg:flex-row gap-8">
               <div className="w-full lg:w-1/2 space-y-4">
@@ -770,16 +812,6 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
                 )}
               </div>
             </div>
-
-            <div className="mt-8 lg:mt-4 flex justify-center">
-              <button
-                onClick={handleDownloadMeme}
-                disabled={isDownloading}
-                className="w-full lg:w-64 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed"
-              >
-                {isDownloading ? 'Processing...' : 'Download Meme'}
-              </button>
-            </div>
           </div>
 
           {generatedOptions && (
@@ -795,7 +827,7 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
                       {templateData.captions.map((captionOption: string, captionIndex: number) => (
                         <button
                           key={captionIndex}
-                          onClick={() => handleAISelection(templateData.template, captionOption, generatedOptions)}
+                          onClick={() => handleCreateFromTemplate(templateData.template, captionOption, generatedOptions)}
                           className="w-full p-3 text-left border rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors flex items-center gap-2"
                         >
                           <span className="w-6 h-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm">
@@ -818,7 +850,7 @@ export default function MemeGenerator({ isGreenscreenMode, onToggleMode }: MemeG
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
       <ImagePicker
