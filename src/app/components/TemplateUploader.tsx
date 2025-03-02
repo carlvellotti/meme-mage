@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'react-hot-toast'
 
@@ -13,6 +13,20 @@ export function TemplateUploader() {
   const [preview, setPreview] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const [isGreenscreen, setIsGreenscreen] = useState(false)
+  const [pastedImages, setPastedImages] = useState<string[]>([])
+  const [isEnhancing, setIsEnhancing] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-resize textarea when content changes
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      // Set the height to match the content (plus a small buffer)
+      textarea.style.height = `${textarea.scrollHeight + 2}px`;
+    }
+  }, [templateExplanation]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -76,6 +90,7 @@ export function TemplateUploader() {
       setPreview('')
       setTemplateName('')
       setTemplateExplanation('')
+      setPastedImages([])
       toast.success('Template uploaded successfully!')
 
     } catch (err) {
@@ -84,6 +99,145 @@ export function TemplateUploader() {
       toast.error('Upload failed')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    const imageItems = Array.from(items).filter(item => item.type.startsWith('image'))
+    
+    for (const item of imageItems) {
+      const blob = item.getAsFile()
+      if (!blob) continue
+
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const base64 = e.target?.result as string
+        setPastedImages(prev => [...prev, base64])
+      }
+      reader.readAsDataURL(blob)
+    }
+  }
+
+  const handleEnhanceDescription = async () => {
+    if (!templateExplanation.trim()) {
+      toast.error('Please provide an initial description')
+      return
+    }
+
+    // Store original description in case we need to restore it on error
+    const originalDescription = templateExplanation
+    
+    setIsEnhancing(true)
+    
+    try {
+      // Format the API request
+      const apiPayload = {
+        description: originalDescription,
+        images: pastedImages
+      }
+      
+      console.log('Sending request to enhance template with:', 
+        `Description: ${originalDescription.substring(0, 50)}...`,
+        `${pastedImages.length} images`
+      )
+      
+      const response = await fetch('/api/enhance-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(apiPayload)
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        console.error('Error response:', error)
+        throw new Error(error || 'Enhancement failed')
+      }
+
+      // Check if the response is a streaming response or regular text
+      const contentType = response.headers.get('content-type')
+      const isStream = contentType && contentType.includes('text/event-stream')
+      
+      console.log('Response type:', contentType, isStream ? 'Streaming' : 'Non-streaming')
+      
+      if (isStream && response.body) {
+        // Handle streaming response
+        console.log('Processing streaming response')
+        
+        // Create a decoder for the stream
+        const decoder = new TextDecoder()
+        const reader = response.body.getReader()
+        
+        // Start with empty enhanced description
+        let enhancedDescription = ''
+        let isFirstChunk = true
+        
+        // Read the stream
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          
+          // Decode the chunk and add to our accumulated text
+          const chunk = decoder.decode(value, { stream: true })
+          enhancedDescription += chunk
+          
+          // Only clear the original text once we start receiving the enhanced version
+          if (isFirstChunk && chunk.trim().length > 0) {
+            setTemplateExplanation('')  // Clear now that we have content coming in
+            isFirstChunk = false
+            console.log('First chunk received, cleared original text')
+          }
+          
+          // Update the textarea with the text we have so far
+          if (!isFirstChunk) {
+            setTemplateExplanation(enhancedDescription)
+          }
+          
+          // Log chunks as they come in (limited logging to prevent console spam)
+          if (enhancedDescription.length < 200) {
+            console.log('Stream chunk received:', chunk.substring(0, 50))
+          }
+        }
+        
+        // Final processing after stream completes
+        console.log('Enhancement complete. Final length:', enhancedDescription.length)
+        console.log('Enhanced description preview:', enhancedDescription.substring(0, 100) + '...')
+        
+        // Make sure the final enhanced text is in the textarea
+        if (enhancedDescription.trim().length > 0) {
+          setTemplateExplanation(enhancedDescription)
+          toast.success('Description enhanced!')
+        } else {
+          console.error('Received empty enhanced description')
+          setTemplateExplanation(originalDescription)
+          toast.error('Received empty response, keeping original description')
+        }
+      } else {
+        // Handle direct text response 
+        console.log('Processing non-streaming response')
+        
+        const enhancedText = await response.text()
+        console.log('Received enhanced text, length:', enhancedText.length)
+        
+        if (enhancedText && enhancedText.trim().length > 0) {
+          console.log('Enhanced text preview:', enhancedText.substring(0, 100) + '...')
+          setTemplateExplanation(enhancedText)
+          toast.success('Description enhanced!')
+        } else {
+          console.error('Received empty response text')
+          setTemplateExplanation(originalDescription)
+          toast.error('Received empty response, keeping original description')
+        }
+      }
+    } catch (err) {
+      console.error('Enhancement error:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to enhance description')
+      // Restore original description on error
+      setTemplateExplanation(originalDescription)
+    } finally {
+      setIsEnhancing(false)
     }
   }
 
@@ -159,15 +313,50 @@ export function TemplateUploader() {
         <label htmlFor="templateExplanation" className="block text-sm font-medium text-gray-700 mb-2">
           How to Use This Template
         </label>
-        <textarea
-          id="templateExplanation"
-          value={templateExplanation}
-          onChange={(e) => setTemplateExplanation(e.target.value)}
-          className="w-full px-4 py-2 border rounded-md h-32 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Explain how this meme template works and how to use it effectively..."
-          required
-        />
+        <div className="space-y-2">
+          <textarea
+            ref={textareaRef}
+            id="templateExplanation"
+            value={templateExplanation}
+            onChange={(e) => setTemplateExplanation(e.target.value)}
+            onPaste={handlePaste}
+            className="w-full px-4 py-2 border rounded-md min-h-[8rem] focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Explain how this meme template works and how to use it effectively... (Paste images here for better AI analysis)"
+            required
+          />
+          <button
+            type="button"
+            onClick={handleEnhanceDescription}
+            disabled={isEnhancing || !templateExplanation.trim()}
+            className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {isEnhancing ? 'Enhancing...' : 'Enhance with AI'}
+          </button>
+        </div>
       </div>
+
+      {pastedImages.length > 0 && (
+        <div className="grid grid-cols-2 gap-4">
+          {pastedImages.map((image, index) => (
+            <div key={index} className="relative group">
+              <img 
+                src={image} 
+                alt={`Example ${index + 1}`} 
+                className="w-full h-40 object-cover rounded-lg"
+              />
+              <button
+                type="button"
+                onClick={() => setPastedImages(prev => prev.filter((_, i) => i !== index))}
+                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Video File</label>
