@@ -13,6 +13,14 @@ interface UnsplashImage {
   user: {
     name: string;
     username: string;
+    links: {
+      html: string;
+    };
+    social: {
+      instagram_username: string | null;
+      twitter_username: string | null;
+      portfolio_url: string | null;
+    };
   };
   links: {
     download_location: string;
@@ -20,7 +28,7 @@ interface UnsplashImage {
 }
 
 interface ImagePickerProps {
-  onSelect: (image: { id: string; name: string; url: string }) => void;
+  onSelect: (image: { id: string; name: string; url: string; attribution?: { photographerName: string; photographerUrl: string; photoUrl: string; username: string; instagram_username: string | null } }) => void;
   onClose: () => void;
   isOpen: boolean;
 }
@@ -268,8 +276,16 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
                           onSelect({
                             id: image.id,
                             name: `Unsplash photo by ${image.user.name}`,
-                            url: image.urls.regular
+                            url: image.urls.regular,
+                            attribution: {
+                              photographerName: image.user.name,
+                              photographerUrl: `${image.user.links.html}?utm_source=meme_mage&utm_medium=referral&utm_campaign=api-credit`,
+                              photoUrl: `https://unsplash.com/photos/${image.id}?utm_source=meme_mage&utm_medium=referral`,
+                              username: image.user.username,
+                              instagram_username: image.user.social?.instagram_username || null
+                            }
                           });
+                          onClose();
                         }}
                         className="group relative aspect-[9/16] overflow-hidden rounded-lg border hover:border-blue-500 transition-colors"
                       >
@@ -278,9 +294,6 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
                           alt={`Photo by ${image.user.name}`} 
                           className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
                         />
-                        <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1.5 transform translate-y-full group-hover:translate-y-0 transition-transform">
-                          Photo by {image.user.name}
-                        </div>
                       </button>
                     ))}
                   </div>

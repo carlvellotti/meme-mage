@@ -111,6 +111,18 @@ export default function MemeGenerator({
     strokeWeight: 0.08,
   });
 
+  // Add debug logging for attribution
+  useEffect(() => {
+    if (selectedBackground) {
+      console.log('DEBUG - Selected Background:', {
+        id: selectedBackground.id,
+        name: selectedBackground.name,
+        hasAttribution: !!selectedBackground.attribution,
+        attributionKeys: selectedBackground.attribution ? Object.keys(selectedBackground.attribution) : []
+      });
+    }
+  }, [selectedBackground]);
+
   useEffect(() => {
     async function loadBackgrounds() {
       setIsLoadingBackgrounds(true);
@@ -795,7 +807,7 @@ export default function MemeGenerator({
                   </div>
                 </div>
 
-                {selectedBackground && selectedBackground.attribution && (
+                {selectedBackground && typeof selectedBackground === 'object' && selectedBackground.attribution && (
                   <>
                     <div className="text-xs text-gray-500 mt-1.5 relative z-0">
                       Background by{' '}
@@ -888,7 +900,25 @@ export default function MemeGenerator({
         isOpen={isUnsplashPickerOpen}
         onClose={() => setIsUnsplashPickerOpen(false)}
         onSelect={(image) => {
-          setSelectedBackground(image);
+          console.log('DEBUG - Image selected:', image);
+          // Ensure attribution is properly structured
+          if (image.attribution) {
+            // Make sure all required properties exist
+            const attribution = {
+              photographerName: image.attribution.photographerName || '',
+              photographerUrl: image.attribution.photographerUrl || '',
+              photoUrl: image.attribution.photoUrl || '',
+              username: image.attribution.username || '',
+              instagram_username: image.attribution.instagram_username || null
+            };
+            
+            setSelectedBackground({
+              ...image,
+              attribution
+            });
+          } else {
+            setSelectedBackground(image);
+          }
           setIsUnsplashPickerOpen(false);
         }}
       />

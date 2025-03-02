@@ -27,6 +27,7 @@ export interface BackgroundImage {
     photographerUrl: string;
     photoUrl: string;
     username: string;
+    instagram_username: string | null;
   };
 }
 
