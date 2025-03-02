@@ -140,6 +140,11 @@ interface LabelSettings {
 - Unsplash API integration with proper attribution
   - Search functionality with debounced queries
   - Pagination support with "Load More"
+  - Enhanced attribution system:
+    - Instagram handle inclusion when available
+    - Fallback to Unsplash username when Instagram unavailable
+    - Clean UI with proper z-index stacking (preview above attribution)
+    - Copyable attribution text with proper format
   - Required attribution format:
     ```html
     Photo by <a href="https://unsplash.com/@username?utm_source=meme_mage&utm_medium=referral">Name</a> on <a href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral">Unsplash</a>
@@ -150,9 +155,9 @@ interface LabelSettings {
 - Three input methods:
   1. Unsplash search
      - Real-time search with 500ms debounce
-     - Grid view with attribution
+     - Clean grid view without distracting attribution overlay
      - Preview thumbnails
-     - Proper photographer credits
+     - Proper photographer credits in MemeGenerator component
   2. File upload (max 5MB)
   3. Direct URL input
 
@@ -163,13 +168,13 @@ interface LabelSettings {
   - Proper error handling for failed loads
 
 - Attribution display:
-  - Overlay on background image
-  - Additional credit under preview
-  - Links to:
-    - Photographer's profile
-    - Photo page
-    - Unsplash homepage
-  - All links include proper UTM tracking
+  - Simplified visible attribution display: "Background by [Name] on Unsplash"
+  - Comprehensive copyable attribution text:
+    - With Instagram: "Photo by [Name] on Unsplash. Instagram: @[instagram_handle]"
+    - Without Instagram: "Photo by [Name] on Unsplash. Unsplash: @[username]"
+  - Only shown for Unsplash images (conditional rendering)
+  - Positioned behind preview with z-index management
+  - Stronger attribution language: "You must credit the photographer when sharing:"
 
 ## Technical Implementation
 
@@ -205,8 +210,9 @@ interface LabelSettings {
 - Features:
   - Full-width search interface
   - Real-time search with debounce
-  - Proper attribution overlay
+  - Clean thumbnail display (no attribution overlay)
   - Download tracking integration
+  - Social media data capture (Instagram, Twitter)
   - UTM parameter handling
 - Direct integration with Unsplash API
 - Used in greenscreen mode for background selection
@@ -341,6 +347,7 @@ interface BackgroundImage {
     photographerUrl: string;
     photoUrl: string;
     username: string;
+    instagram_username: string | null;
   };
 }
 ```
