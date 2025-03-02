@@ -60,6 +60,11 @@ interface UnsplashImage {
   user: {
     name: string;
     username: string;
+    social?: {
+      instagram_username: string | null;
+      twitter_username: string | null;
+      portfolio_url: string | null;
+    };
   };
 }
 
@@ -105,6 +110,18 @@ export default function MemeGenerator({
     color: 'white',
     strokeWeight: 0.08,
   });
+
+  // Add debug logging for attribution
+  useEffect(() => {
+    if (selectedBackground) {
+      console.log('DEBUG - Selected Background:', {
+        id: selectedBackground.id,
+        name: selectedBackground.name,
+        hasAttribution: !!selectedBackground.attribution,
+        attributionKeys: selectedBackground.attribution ? Object.keys(selectedBackground.attribution) : []
+      });
+    }
+  }, [selectedBackground]);
 
   useEffect(() => {
     async function loadBackgrounds() {
@@ -722,26 +739,6 @@ export default function MemeGenerator({
                               alt={selectedBackground.name}
                               className="w-full h-full object-cover"
                             />
-                            <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1.5">
-                              Photo by{' '}
-                              <a 
-                                href={`https://unsplash.com/photos/${selectedBackground.id}?utm_source=meme_mage&utm_medium=referral`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-white underline"
-                              >
-                                {selectedBackground.name.replace('Unsplash photo by ', '')}
-                              </a>
-                              {' '}on{' '}
-                              <a
-                                href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-white underline"
-                              >
-                                Unsplash
-                              </a>
-                            </div>
                             <button
                               onClick={() => setSelectedBackground(null)}
                               className="absolute top-2 right-2 p-1 bg-black bg-opacity-50 rounded-full text-white hover:bg-opacity-75"
@@ -792,7 +789,7 @@ export default function MemeGenerator({
 
               <div className="w-full lg:w-1/2">
                 <h2 className="text-lg font-medium mb-2">Preview</h2>
-                <div className="lg:sticky lg:top-4">
+                <div className="lg:sticky lg:top-4 relative z-10">
                   <div className="relative aspect-[9/16] w-full bg-black rounded-lg">
                     {previewCanvas ? (
                       <div className="absolute inset-0">
@@ -810,27 +807,51 @@ export default function MemeGenerator({
                   </div>
                 </div>
 
-                {selectedBackground && (
-                  <div className="text-xs text-gray-500 mt-1.5">
-                    Background by{' '}
-                    <a 
-                      href={`https://unsplash.com/photos/${selectedBackground.id}?utm_source=meme_mage&utm_medium=referral`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-gray-500 underline"
-                    >
-                      {selectedBackground.name.replace('Unsplash photo by ', '')}
-                    </a>
-                    {' '}on{' '}
-                    <a
-                      href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-gray-500 underline"
-                    >
-                      Unsplash
-                    </a>
-                  </div>
+                {selectedBackground && typeof selectedBackground === 'object' && selectedBackground.attribution && (
+                  <>
+                    <div className="text-xs text-gray-500 mt-1.5 relative z-0">
+                      Background by{' '}
+                      <a 
+                        href={selectedBackground.attribution?.photographerUrl || `https://unsplash.com/photos/${selectedBackground.id}?utm_source=meme_mage&utm_medium=referral`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-500 underline"
+                      >
+                        {selectedBackground.name.replace('Unsplash photo by ', '')}
+                      </a>
+                      {' '}on{' '}
+                      <a
+                        href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral&utm_campaign=api-credit"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-500 underline"
+                      >
+                        Unsplash
+                      </a>
+                    </div>
+                    <div className="mt-3 mb-2 relative z-0">
+                      <p className="text-xs text-gray-600 mb-1 font-medium">You must credit the photographer when sharing:</p>
+                      <div className="relative">
+                        <input 
+                          type="text" 
+                          value={`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution && 'instagram_username' in selectedBackground.attribution && selectedBackground.attribution.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`}
+                          readOnly 
+                          className="text-xs px-3 py-2 border rounded w-full pr-10 bg-gray-50"
+                        />
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution && 'instagram_username' in selectedBackground.attribution && selectedBackground.attribution.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`);
+                            toast.success('Attribution copied to clipboard');
+                          }}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1.5"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -879,7 +900,25 @@ export default function MemeGenerator({
         isOpen={isUnsplashPickerOpen}
         onClose={() => setIsUnsplashPickerOpen(false)}
         onSelect={(image) => {
-          setSelectedBackground(image);
+          console.log('DEBUG - Image selected:', image);
+          // Ensure attribution is properly structured
+          if (image.attribution) {
+            // Make sure all required properties exist
+            const attribution = {
+              photographerName: image.attribution.photographerName || '',
+              photographerUrl: image.attribution.photographerUrl || '',
+              photoUrl: image.attribution.photoUrl || '',
+              username: image.attribution.username || '',
+              instagram_username: image.attribution.instagram_username || null
+            };
+            
+            setSelectedBackground({
+              ...image,
+              attribution
+            });
+          } else {
+            setSelectedBackground(image);
+          }
           setIsUnsplashPickerOpen(false);
         }}
       />

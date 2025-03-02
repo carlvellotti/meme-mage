@@ -16,6 +16,11 @@ interface UnsplashImage {
     links: {
       html: string;
     };
+    social: {
+      instagram_username: string | null;
+      twitter_username: string | null;
+      portfolio_url: string | null;
+    };
   };
   links: {
     html: string;
@@ -23,7 +28,7 @@ interface UnsplashImage {
 }
 
 interface UnsplashPickerProps {
-  onSelect: (image: { id: string; name: string; url: string; attribution: { photographerName: string; photographerUrl: string; photoUrl: string; username: string } }) => void;
+  onSelect: (image: { id: string; name: string; url: string; attribution: { photographerName: string; photographerUrl: string; photoUrl: string; username: string; instagram_username: string | null } }) => void;
   onClose: () => void;
   isOpen: boolean;
 }
@@ -97,7 +102,8 @@ export default function UnsplashPicker({ onSelect, onClose, isOpen }: UnsplashPi
         photographerName: image.user.name,
         photographerUrl: image.user.links.html,
         photoUrl: image.links.html,
-        username: image.user.username
+        username: image.user.username,
+        instagram_username: image.user.social?.instagram_username || null
       }
     });
   };
@@ -158,37 +164,6 @@ export default function UnsplashPicker({ onSelect, onClose, isOpen }: UnsplashPi
                   alt={`Photo by ${image.user.name} on Unsplash`} 
                   className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
                 />
-                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1.5">
-                  <a 
-                    href={`${image.links.html}?utm_source=meme_mage&utm_medium=referral`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Photo
-                  </a>
-                  {' '}by{' '}
-                  <a 
-                    href={`https://unsplash.com/@${image.user.username}?utm_source=meme_mage&utm_medium=referral`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {image.user.name}
-                  </a>
-                  {' '}on{' '}
-                  <a
-                    href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Unsplash
-                  </a>
-                </div>
               </button>
             ))}
           </div>

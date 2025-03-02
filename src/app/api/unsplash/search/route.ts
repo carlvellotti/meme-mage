@@ -40,6 +40,11 @@ export async function GET(request: Request) {
         links: {
           html: photo.user.links.html, // Photographer profile URL
         },
+        social: {
+          instagram_username: photo.user.instagram_username,
+          twitter_username: photo.user.twitter_username,
+          portfolio_url: photo.user.portfolio_url
+        }
       },
       links: {
         html: photo.links.html, // Photo page URL
