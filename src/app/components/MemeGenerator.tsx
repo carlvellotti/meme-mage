@@ -822,13 +822,13 @@ export default function MemeGenerator({
                       <div className="relative">
                         <input 
                           type="text" 
-                          value={`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution?.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`}
+                          value={`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution && 'instagram_username' in selectedBackground.attribution && selectedBackground.attribution.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`}
                           readOnly 
                           className="text-xs px-3 py-2 border rounded w-full pr-10 bg-gray-50"
                         />
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution?.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`);
+                            navigator.clipboard.writeText(`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution && 'instagram_username' in selectedBackground.attribution && selectedBackground.attribution.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`);
                             toast.success('Attribution copied to clipboard');
                           }}
                           className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1.5"
