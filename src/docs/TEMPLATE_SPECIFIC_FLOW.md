@@ -21,24 +21,34 @@ These components work together in a sequential flow, passing template and captio
 **Purpose**: Display available templates and provide entry points to the template-specific flow.
 
 **Key Features**:
-- Fetches templates from `/api/templates` endpoint
+- Fetches templates from `/api/templates` endpoint with cache-busting timestamp
 - Displays templates in a grid layout with preview videos
+- Provides a "Refresh" button to manually fetch the latest templates
+- Implements infinite scrolling for template browsing
 - Provides two interaction modes:
   - Direct selection (passes template to parent)
   - "Create" button (initiates template-specific flow)
 
 **State Management**:
 - `templates`: Array of MemeTemplate objects
+- `visibleTemplates`: Subset of templates displayed for infinite scrolling
+- `page`: Current page number for pagination
 - `selectedTemplate`: Currently selected template for the specific flow
 - `isLoading`: Loading state for template fetching
+- `isRefreshing`: Loading state for manual refresh
 - `error`: Error state for template fetching
+- `hoveredTemplate`: ID of the currently hovered template
 
 **Key Methods**:
+- `fetchTemplates()`: Fetches templates from API with cache-busting
+- `refreshTemplates()`: Manually triggers a template refresh
+- `handleCardClick()`: Navigates to template detail page
 - `handleCreateClick()`: Initiates template-specific flow
 - `handleBack()`: Returns to template browser from specific generator
 
 **Data Flow**:
 - On mount: Fetches templates from API
+- On refresh: Re-fetches templates with a new timestamp parameter
 - On template selection: Passes template to parent via `onSelectTemplate`
 - On "Create" button: Sets `selectedTemplate` and renders TemplateSpecificGenerator
 
@@ -217,7 +227,13 @@ interface MemeTemplate {
 ### 1. Template Listing
 - **Endpoint**: `/api/templates`
 - **Method**: GET
-- **Response**: Array of MemeTemplate objects
+- **Query Parameters**:
+  - `t`: Timestamp for cache-busting (optional)
+- **Response Headers**:
+  - `Cache-Control: no-store, max-age=0`
+  - `Pragma: no-cache`
+  - `Expires: 0`
+- **Response**: Array of MemeTemplate objects ordered by creation date (newest first)
 - **Implementation**: `src/app/api/templates/route.ts`
 
 ### 2. Template Instructions Update
@@ -267,6 +283,11 @@ The template-specific flow implements robust error handling:
      3. Show error if both fail
    - Loading states during API calls
 
+4. **Template Fetching**:
+   - Error reporting with fallback UI
+   - Manual refresh capability to recover from failed fetches
+   - Cache-busting mechanisms to ensure fresh data
+
 ## Implementation Notes
 
 ### Tool-based vs Regular Endpoints
@@ -284,6 +305,20 @@ The update process:
 2. On save, sends PUT request to `/api/templates/[id]/update-instructions`
 3. Updates local state on success
 4. Shows success/error toast notification
+
+### Cache Prevention for Templates
+
+To ensure users always see the latest templates:
+
+1. The TemplateBrowser component:
+   - Adds a timestamp parameter to API requests to bypass browser caching
+   - Provides a manual refresh button to force a fresh data fetch
+   - Implements loading states during template fetching and refreshing
+
+2. The templates API endpoint:
+   - Orders templates by creation date (newest first) to highlight new additions
+   - Sets multiple cache control headers to prevent browser and CDN caching
+   - Logs timestamp-based requests for debugging purposes
 
 ### Next.js API Routing
 
@@ -315,12 +350,17 @@ async rewrites() {
 2. **API Calls**:
    - AI endpoints can have high latency
    - Loading states are shown during API calls
-   - Responses are cached where appropriate
+   - Cache control headers prevent unwanted caching for data that needs to be fresh
 
 3. **Video Processing**:
    - Final video generation happens client-side
    - Uses efficient canvas operations
    - Properly cleans up resources after processing
+
+4. **Template Loading**:
+   - Infinite scrolling to avoid loading all templates at once
+   - Pagination implemented through the `visibleTemplates` state
+   - Intersection Observer API for efficient scroll detection
 
 ## Future Improvements
 
@@ -342,7 +382,7 @@ async rewrites() {
 4. **Performance**:
    - Optimize canvas operations
    - Implement server-side rendering where appropriate
-   - Add caching for frequently used templates
+   - Add more sophisticated caching with proper invalidation strategies
 
 ## Troubleshooting
 
@@ -363,16 +403,24 @@ async rewrites() {
    - Check network tab for detailed error responses
    - Verify prompt formatting
 
+4. **Templates Not Displaying or Updating**:
+   - Click the Refresh button to force a new fetch
+   - Check the Network tab for API responses
+   - Verify database connection and permissions
+   - Clear browser cache if necessary
+
 ### Debugging Tools
 
 1. **Console Logging**:
    - Extensive logging is implemented throughout the flow
    - Key events and data structures are logged
    - API responses and errors are detailed
+   - Template fetch requests include timestamps in logs
 
 2. **Network Monitoring**:
    - All API calls can be monitored in browser dev tools
    - Response structures are logged for debugging
+   - Cache-related headers can be inspected
 
 3. **Test Endpoint**:
    - A simple test endpoint at `/api/test` returns a success message
@@ -382,4 +430,6 @@ async rewrites() {
 
 The template-specific meme creation flow provides a streamlined, user-friendly experience for creating memes from specific templates. By combining AI-powered caption generation with a focused template selection, users can quickly create high-quality, contextually appropriate memes.
 
-The implementation balances flexibility, performance, and error resilience, with graceful fallbacks and detailed error handling throughout the flow. The modular component architecture allows for future enhancements and extensions while maintaining a clean separation of concerns. 
+The implementation balances flexibility, performance, and error resilience, with graceful fallbacks and detailed error handling throughout the flow. The modular component architecture allows for future enhancements and extensions while maintaining a clean separation of concerns.
+
+The recent addition of refresh functionality and cache prevention mechanisms ensures users always have access to the latest templates, improving the overall user experience and preventing confusion when new templates aren't immediately visible. 
