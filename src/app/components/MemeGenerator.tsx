@@ -60,6 +60,11 @@ interface UnsplashImage {
   user: {
     name: string;
     username: string;
+    social?: {
+      instagram_username: string | null;
+      twitter_username: string | null;
+      portfolio_url: string | null;
+    };
   };
 }
 
