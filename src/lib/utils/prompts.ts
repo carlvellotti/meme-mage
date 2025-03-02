@@ -35,7 +35,7 @@ Key rules:
 - Casual > Professional
 - Keep the captions relatively realistic so they are relatable for the audience
 - Never put any part of the caption in quotes ("" or '') 
-- Treat user inputs loosely – It's MUCH more important to come up with a good meme than follow the user's input exactly
+- Treat user inputs loosely – It's MUCH more important to come up with a good meme than follow the user's input exactly
 - Remember the videos ARE the punchline
 - These are CAPTIONS that accompany a meme video, not a joke on their own. Never quote or reference the template's original language directly in your caption.
 
@@ -82,4 +82,40 @@ IMPORTANT:
 - Number the captions 1, 2, and 3
 
 If a tool called "generate_template_response" is available, use it to structure your response.`;
+
+export const getTemplateAnalysisPrompt = () => `You are a meme template creator. Create a detailed description template of this meme based on the images and context I provide. Your description should help match user concepts with appropriate meme templates.
+
+Structure your analysis as follows:
+
+1. TRANSCRIPT: If provided, include the transcript of the video. If not provided, just skip this section.
+
+2. VISUAL DESCRIPTION:
+- Describe exactly what is happening visually in 5 bullet points
+- Include details about the character(s), setting, expressions, and camera angle
+- Mention any key visual elements that make this meme recognizable
+- Describe the exact moment/reaction being captured
+
+3. EMOTIONAL CONTEXT
+- Identify the core emotions, feelings, and situations where this template in 5 bullet points
+- Describe the psychological state/reaction the template captures
+- Include subtleties of the emotional tone (irony, sincerity, exaggeration)
+- Explain what makes this emotional reaction distinctive
+- Describe relationships between subjects if applicable, power dynamics or social context, who the user would identify with when using this meme
+
+4. USAGE PATTERNS:
+- List 5 typical situations where this template works well
+- Identify the types of concepts that pair naturally with this template
+- Explain what scenarios make this template especially effective
+- Include any pattern of setup-punchline that works consistently
+
+5. EXAMPLES:
+- Include all example captions I provide
+- For each example, write a detailed 2-4 sentence explanation of why it works well
+- Analyze how the caption plays with the template's core emotion
+- Explain why the specific format/wording makes it effective
+- Connect how the example leverages the unique elements of this template
+
+Keep your tone analytical but conversational. Focus particularly on what makes this template unique and how its emotional context can be applied to various situations.
+
+Always format as MARKDOWN.`;
 
