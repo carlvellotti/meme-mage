@@ -111,14 +111,14 @@ export default function UnsplashPicker({ onSelect, onClose, isOpen }: UnsplashPi
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg w-full max-w-xl max-h-[600px] flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
+      <div className="bg-gray-800 rounded-lg w-full max-w-xl max-h-[600px] flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b flex justify-between items-center">
-          <h2 className="text-lg font-medium">Choose a background image</h2>
+        <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+          <h2 className="text-lg font-medium text-white">Choose a background image</h2>
           <button 
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-gray-300 hover:text-white"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -127,7 +127,7 @@ export default function UnsplashPicker({ onSelect, onClose, isOpen }: UnsplashPi
         </div>
 
         {/* Search */}
-        <div className="p-3 border-b">
+        <div className="p-3 border-b border-gray-700">
           <div className="relative">
             <input
               type="text"
@@ -137,7 +137,7 @@ export default function UnsplashPicker({ onSelect, onClose, isOpen }: UnsplashPi
                 setPage(1);
               }}
               placeholder="Search for images..."
-              className="w-full p-2 pl-9 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+              className="w-full p-2 pl-9 border border-gray-700 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-400 text-sm"
             />
             <svg 
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
@@ -157,7 +157,7 @@ export default function UnsplashPicker({ onSelect, onClose, isOpen }: UnsplashPi
               <button
                 key={image.id}
                 onClick={() => handleImageSelect(image)}
-                className="group relative aspect-[9/16] overflow-hidden rounded-lg border hover:border-blue-500 transition-colors"
+                className="group relative aspect-[9/16] overflow-hidden rounded-lg border border-gray-700 hover:border-blue-400 transition-colors"
               >
                 <img 
                   src={image.urls.small} 
