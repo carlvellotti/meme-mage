@@ -201,16 +201,16 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
   return (
     <div className="fixed inset-0 z-[100]">
       <div 
-        className="absolute inset-0 bg-black/50" 
+        className="absolute inset-0 bg-black/60" 
         style={{ position: 'fixed' }}
       />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <div 
           ref={modalRef}
-          className="bg-white rounded-lg w-full max-w-xl flex flex-col relative z-10"
+          className="bg-gray-800 rounded-lg w-full max-w-xl flex flex-col relative z-10 border border-gray-700"
           style={{ height: '600px' }}
         >
-          <div className="border-b">
+          <div className="border-b border-gray-700">
             <div className="flex">
               {[
                 { id: 'unsplash', label: 'Unsplash' },
@@ -222,8 +222,8 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
                   onClick={() => setActiveTab(tab.id as Tab)}
                   className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 focus:outline-none ${
                     activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-600'
                   }`}
                 >
                   {tab.label}
@@ -235,7 +235,7 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
           <div className="flex-1 overflow-y-auto">
             {activeTab === 'unsplash' && (
               <div className="h-full flex flex-col">
-                <div className="p-3 border-b">
+                <div className="p-3 border-b border-gray-700">
                   <div className="relative">
                     <input
                       type="text"
@@ -245,7 +245,7 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
                         setPage(1);
                       }}
                       placeholder="Search Unsplash..."
-                      className="w-full p-2 pl-9 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full p-2 pl-9 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-gray-700 text-white"
                     />
                     <svg 
                       className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
@@ -287,7 +287,7 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
                           });
                           onClose();
                         }}
-                        className="group relative aspect-[9/16] overflow-hidden rounded-lg border hover:border-blue-500 transition-colors"
+                        className="group relative aspect-[9/16] overflow-hidden rounded-lg border border-gray-700 hover:border-blue-400 transition-colors"
                       >
                         <img 
                           src={image.urls.small} 
@@ -303,7 +303,7 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
                       <button
                         onClick={() => setPage(p => p + 1)}
                         disabled={isLoading}
-                        className="px-4 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                        className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                       >
                         {isLoading ? 'Loading...' : 'Load More'}
                       </button>
@@ -312,8 +312,20 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
 
                   {isLoading && images.length === 0 && (
                     <div className="text-center py-12">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mx-auto"></div>
-                      <p className="mt-2 text-gray-600">Searching images...</p>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto"></div>
+                      <p className="mt-2 text-gray-400">Searching images...</p>
+                    </div>
+                  )}
+
+                  {!isLoading && images.length === 0 && search && (
+                    <div className="text-center py-12 text-gray-400">
+                      No images found for "{search}"
+                    </div>
+                  )}
+
+                  {!isLoading && images.length === 0 && !search && (
+                    <div className="text-center py-12 text-gray-400">
+                      Start typing to search for images
                     </div>
                   )}
                 </div>
@@ -321,19 +333,17 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
             )}
 
             {activeTab === 'upload' && (
-              <div
-                onDragEnter={handleDragEnter}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className="h-full p-8"
-              >
+              <div className="p-4 h-full flex flex-col">
                 <div 
-                  className={`w-full h-full flex items-center justify-center border-2 border-dashed rounded-lg transition-colors ${
+                  className={`flex-1 border-2 border-dashed rounded-lg flex flex-col items-center justify-center ${
                     isDragging 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : 'border-gray-300 hover:border-gray-400'
+                      ? 'border-blue-500 bg-blue-900 bg-opacity-10' 
+                      : 'border-gray-700 hover:border-gray-600'
                   }`}
+                  onDragEnter={handleDragEnter}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
                 >
                   <input
                     type="file"
@@ -342,64 +352,53 @@ export default function ImagePicker({ onSelect, onClose, isOpen }: ImagePickerPr
                     className="hidden"
                     id="file-upload"
                   />
-                  <label
-                    htmlFor="file-upload"
-                    className="flex flex-col items-center cursor-pointer p-8 text-center"
-                  >
-                    <svg
-                      className={`w-16 h-16 mb-4 transition-colors ${
-                        isDragging ? 'text-blue-500' : 'text-gray-400'
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
+
+                  <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
+                    <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
-                    <p className={`text-base mb-2 font-medium transition-colors ${
-                      isDragging ? 'text-blue-600' : 'text-gray-600'
-                    }`}>
-                      {isDragging ? 'Drop image here' : 'Click to upload or drag and drop'}
-                    </p>
-                    <p className="text-sm text-gray-500">Maximum file size: 5MB</p>
+                    <span className="text-sm text-gray-300 font-medium">Click to upload or drag and drop</span>
+                    <span className="text-xs text-gray-400 mt-1">PNG, JPG, GIF up to 10MB</span>
                   </label>
                 </div>
               </div>
             )}
 
             {activeTab === 'link' && (
-              <div className="p-6">
+              <div className="p-4">
                 <form onSubmit={handleLinkSubmit} className="w-full">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Image URL
-                  </label>
-                  <input
-                    type="text"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://example.com/image.jpg"
-                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm mb-4"
-                  />
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Image URL
+                    </label>
+                    <input
+                      type="text"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="https://example.com/image.jpg"
+                      className="w-full p-2 border border-gray-700 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                   <button
                     type="submit"
                     disabled={!imageUrl.trim()}
-                    className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-sm"
+                    className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed"
                   >
-                    Add Image
+                    Use This Image
                   </button>
                 </form>
               </div>
             )}
           </div>
 
-          <button 
-            onClick={onClose}
-            className="absolute top-2 right-2 p-1 text-gray-500 hover:text-gray-700"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="p-3 border-t border-gray-700 flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 mr-2"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
     </div>
