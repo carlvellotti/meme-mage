@@ -463,35 +463,35 @@ export default function MemeGenerator({
 
                     <div>
                       <label className="block text-xs text-gray-300 mb-1">Text Alignment</label>
-                      <div className="flex gap-0 border rounded-md overflow-hidden">
+                      <div className="flex gap-0 border border-gray-700 rounded-md overflow-hidden">
                         <button
                           onClick={() => updateTextSetting('alignment', 'left')}
                           className={`flex-1 p-2 text-sm ${
                             textSettings.alignment === 'left' 
-                              ? 'bg-blue-100 text-blue-700' 
-                              : 'hover:bg-gray-50'
+                              ? 'bg-blue-900 text-blue-300' 
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
                           Left
                         </button>
-                        <div className="w-px bg-gray-200" />
+                        <div className="w-px bg-gray-600" />
                         <button
                           onClick={() => updateTextSetting('alignment', 'center')}
                           className={`flex-1 p-2 text-sm ${
                             textSettings.alignment === 'center' 
-                              ? 'bg-blue-100 text-blue-700' 
-                              : 'hover:bg-gray-50'
+                              ? 'bg-blue-900 text-blue-300' 
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
                           Center
                         </button>
-                        <div className="w-px bg-gray-200" />
+                        <div className="w-px bg-gray-600" />
                         <button
                           onClick={() => updateTextSetting('alignment', 'right')}
                           className={`flex-1 p-2 text-sm ${
                             textSettings.alignment === 'right' 
-                              ? 'bg-blue-100 text-blue-700' 
-                              : 'hover:bg-gray-50'
+                              ? 'bg-blue-900 text-blue-300' 
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
                           Right

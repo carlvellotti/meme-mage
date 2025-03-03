@@ -71,7 +71,7 @@ export default function TemplatePage({ params }: { params: { slug: string } }) {
     return (
       <div className="py-8 md:py-12">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold mb-4">Loading Template...</h1>
+          <h1 className="text-3xl font-bold text-white">Loading Template...</h1>
         </div>
       </div>
     );
@@ -81,14 +81,16 @@ export default function TemplatePage({ params }: { params: { slug: string } }) {
     return (
       <div className="py-8 md:py-12">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold mb-4">Error</h1>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-white">Error</h1>
+            <button 
+              onClick={handleBack}
+              className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors border border-gray-700"
+            >
+              Back to Template Library
+            </button>
+          </div>
           <p className="text-red-500">{error}</p>
-          <button 
-            onClick={handleBack}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-          >
-            Back to Template Library
-          </button>
         </div>
       </div>
     );
@@ -98,14 +100,16 @@ export default function TemplatePage({ params }: { params: { slug: string } }) {
     return (
       <div className="py-8 md:py-12">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold mb-4">Template Not Found</h1>
-          <p>The template you're looking for doesn't exist.</p>
-          <button 
-            onClick={handleBack}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-          >
-            Back to Template Library
-          </button>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-white">Template Not Found</h1>
+            <button 
+              onClick={handleBack}
+              className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors border border-gray-700"
+            >
+              Back to Template Library
+            </button>
+          </div>
+          <p className="text-gray-300">The template you're looking for doesn't exist.</p>
         </div>
       </div>
     );
@@ -114,39 +118,37 @@ export default function TemplatePage({ params }: { params: { slug: string } }) {
   return (
     <div className="py-8 md:py-12">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-4">
-          {template.name}
-        </h1>
-        
-        <div className="bg-white rounded-lg shadow p-6">
-          {template && selectedCaption && generatedOptions ? (
-            <div>
-              <button 
-                onClick={handleBack}
-                className="mb-4 px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300"
-              >
-                Back to Templates
-              </button>
-              <div className="mt-4">
-                <MemeGenerator 
-                  isGreenscreenMode={isGreenscreenMode} 
-                  onToggleMode={handleToggleMode}
-                  initialTemplate={template}
-                  initialCaption={selectedCaption}
-                  initialOptions={generatedOptions}
-                  onBack={handleMemeGeneratorBack}
-                />
-              </div>
-            </div>
-          ) : (
-            <TemplateSpecificGenerator 
-              template={template} 
-              onBack={handleBack}
-              onSelectTemplate={handleCreateFromTemplate}
-              isGreenscreenMode={isGreenscreenMode}
-            />
-          )}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-white">
+            {template.name}
+          </h1>
+          <button 
+            onClick={handleBack}
+            className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors border border-gray-700"
+          >
+            Back to Templates
+          </button>
         </div>
+        
+        {template && selectedCaption && generatedOptions ? (
+          <div className="mt-4">
+            <MemeGenerator 
+              isGreenscreenMode={isGreenscreenMode} 
+              onToggleMode={handleToggleMode}
+              initialTemplate={template}
+              initialCaption={selectedCaption}
+              initialOptions={generatedOptions}
+              onBack={handleMemeGeneratorBack}
+            />
+          </div>
+        ) : (
+          <TemplateSpecificGenerator 
+            template={template} 
+            onBack={handleBack}
+            onSelectTemplate={handleCreateFromTemplate}
+            isGreenscreenMode={isGreenscreenMode}
+          />
+        )}
       </div>
     </div>
   );

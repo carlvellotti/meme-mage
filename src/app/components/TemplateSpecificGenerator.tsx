@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MemeTemplate } from '@/lib/supabase/types';
 import { toast } from 'react-hot-toast';
 import SpinningOrb from './SpinningOrb';
@@ -36,6 +36,19 @@ export default function TemplateSpecificGenerator({
   const [instructions, setInstructions] = useState(template.instructions || '');
   const [isEditingInstructions, setIsEditingInstructions] = useState(false);
   const [isSavingInstructions, setIsSavingInstructions] = useState(false);
+  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea when content changes or when editing mode is enabled
+  useEffect(() => {
+    if (isEditingInstructions && textareaRef.current) {
+      const textarea = textareaRef.current;
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      // Set the height to match the content
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [instructions, isEditingInstructions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,37 +254,34 @@ export default function TemplateSpecificGenerator({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold">Create Meme from Template</h2>
-        <button 
-          onClick={onBack}
-          className="px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300"
-        >
-          Back to Templates
-        </button>
+      {/* Template Preview */}
+      <div className="border border-gray-700 rounded-lg overflow-hidden mb-6">
+        <video 
+          src={template.video_url}
+          className="w-full aspect-video object-cover"
+          controls
+        />
       </div>
       
-      {/* Template Preview */}
-      <div className="border rounded-lg p-4 bg-gray-50">
-        <h3 className="font-medium mb-4">{template.name}</h3>
-        <div className="border rounded-lg overflow-hidden mb-4">
-          <video 
-            src={template.video_url}
-            className="w-full aspect-video object-cover"
-            controls
-          />
-        </div>
-        
-        {/* Template Instructions Editor */}
-        <div className="mt-4">
-          <div className="flex justify-between items-center mb-2">
-            <h4 className="font-medium">Template Instructions</h4>
+      {/* Template Instructions Editor */}
+      <div className="border border-gray-700 rounded-lg p-3 bg-gray-800 mb-6">
+        <div className="flex justify-between items-center mb-1">
+          <h4 className="font-medium text-white text-sm">Template Instructions</h4>
+          <div className="flex space-x-2">
+            {!isEditingInstructions && instructions && (
+              <button
+                onClick={() => setIsInstructionsExpanded(!isInstructionsExpanded)}
+                className="px-2 py-1 bg-gray-700 text-white rounded-md text-xs hover:bg-gray-600"
+              >
+                {isInstructionsExpanded ? 'Collapse' : 'Expand'}
+              </button>
+            )}
             {isEditingInstructions ? (
               <div className="space-x-2">
                 <button 
                   onClick={saveInstructions}
                   disabled={isSavingInstructions}
-                  className="px-3 py-1 bg-green-600 text-white rounded-md text-sm"
+                  className="px-2 py-1 bg-green-600 text-white rounded-md text-xs"
                 >
                   {isSavingInstructions ? 'Saving...' : 'Save'}
                 </button>
@@ -280,7 +290,7 @@ export default function TemplateSpecificGenerator({
                     setInstructions(template.instructions || '');
                     setIsEditingInstructions(false);
                   }}
-                  className="px-3 py-1 bg-gray-600 text-white rounded-md text-sm"
+                  className="px-2 py-1 bg-gray-600 text-white rounded-md text-xs"
                 >
                   Cancel
                 </button>
@@ -288,98 +298,108 @@ export default function TemplateSpecificGenerator({
             ) : (
               <button 
                 onClick={() => setIsEditingInstructions(true)}
-                className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm"
+                className="px-2 py-1 bg-blue-600 text-white rounded-md text-xs"
               >
                 Edit
               </button>
             )}
           </div>
-          
-          {isEditingInstructions ? (
-            <textarea
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              className="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500"
-              rows={4}
-              placeholder="Add instructions for how this template should be used..."
-            />
-          ) : (
-            <p className="text-gray-700 p-3 border rounded-md bg-white">
+        </div>
+        
+        {isEditingInstructions ? (
+          <textarea
+            ref={textareaRef}
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
+            style={{ minHeight: '100px' }}
+            placeholder="Add instructions for how this template should be used..."
+          />
+        ) : (
+          <div className="relative">
+            <p className="text-gray-300 p-2 border border-gray-700 rounded-md bg-gray-700 overflow-hidden text-sm" 
+               style={{ maxHeight: isInstructionsExpanded ? 'none' : '40px', transition: 'max-height 0.3s ease' }}>
               {instructions || 'No instructions provided.'}
             </p>
-          )}
-        </div>
+            {!isInstructionsExpanded && instructions && instructions.length > 60 && (
+              <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-gray-700 to-transparent"></div>
+            )}
+          </div>
+        )}
       </div>
       
       {/* Caption Generation Form */}
       {generatedCaptions.length === 0 ? (
-        <form onSubmit={handleSubmit} className="space-y-4 border rounded-lg p-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Target Audience
-            </label>
-            <input
-              value={audience}
-              onChange={(e) => setAudience(e.target.value)}
-              className="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. Software developers, gamers, crypto traders..."
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Describe your meme idea
-            </label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-              }}
-              className="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500"
-              rows={3}
-              placeholder="Describe what kind of meme you want to create... (Press Enter to submit, Shift+Enter for new line)"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select AI Model
-            </label>
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value as 'openai' | 'anthropic' | 'anthropic-3-5')}
-              className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="anthropic-3-5">Claude 3.5 Sonnet</option>
-              <option value="anthropic">Claude 3.7 Sonnet</option>
-              <option value="openai">GPT-4</option>
-            </select>
-          </div>
+        <div className="border border-gray-700 rounded-lg p-4 bg-gray-800">
+          <h2 className="text-xl font-bold text-white mb-4">Create Meme from Template</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Target Audience
+              </label>
+              <input
+                value={audience}
+                onChange={(e) => setAudience(e.target.value)}
+                className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. Software developers, gamers, crypto traders..."
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Describe your meme idea
+              </label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }}
+                className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="Describe what kind of meme you want to create... (Press Enter to submit, Shift+Enter for new line)"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Select AI Model
+              </label>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value as 'openai' | 'anthropic' | 'anthropic-3-5')}
+                className="w-full p-2 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="anthropic-3-5">Claude 3.5 Sonnet</option>
+                <option value="anthropic">Claude 3.7 Sonnet</option>
+                <option value="openai">GPT-4</option>
+              </select>
+            </div>
 
-          <button
-            type="submit"
-            disabled={!prompt.trim()}
-            className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed"
-          >
-            Generate Captions
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={!prompt.trim()}
+              className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed"
+            >
+              Generate Captions
+            </button>
+          </form>
+        </div>
       ) : (
         // Caption Selection UI
-        <div className="border rounded-lg p-4">
-          <h3 className="font-medium mb-4">Select a Caption:</h3>
+        <div className="border border-gray-700 rounded-lg p-4 bg-gray-800">
+          <h3 className="font-medium mb-4 text-white">Select a Caption:</h3>
           <div className="space-y-3">
             {generatedCaptions.map((caption, index) => (
               <button
                 key={index}
                 onClick={() => handleCaptionSelect(caption)}
-                className="w-full p-3 text-left border rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors flex items-center gap-2"
+                className="w-full p-3 text-left border border-gray-700 rounded-lg hover:bg-gray-700 hover:border-blue-500 transition-colors flex items-center gap-2 text-white"
               >
-                <span className="w-6 h-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm">
+                <span className="w-6 h-6 flex items-center justify-center rounded-full bg-blue-900 text-blue-300 text-sm">
                   {index + 1}
                 </span>
                 <span>{caption}</span>
@@ -389,7 +409,7 @@ export default function TemplateSpecificGenerator({
           
           <button
             onClick={() => setGeneratedCaptions([])}
-            className="mt-4 w-full py-2 px-4 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+            className="mt-4 w-full py-2 px-4 bg-gray-700 text-white rounded-md hover:bg-gray-600"
           >
             Generate New Captions
           </button>
