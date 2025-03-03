@@ -121,7 +121,7 @@ export function TemplateUploader() {
     }
   }
 
-  const handleEnhanceDescription = async () => {
+  const enhanceDescription = async () => {
     if (!templateExplanation.trim()) {
       toast.error('Please provide an initial description')
       return
@@ -271,33 +271,74 @@ export function TemplateUploader() {
   }, [])
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6 bg-gray-800 p-6 rounded-lg border border-gray-700">
       <div>
-        <label htmlFor="templateName" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="template-name" className="block text-sm font-medium text-gray-300 mb-2">
           Template Name
         </label>
         <input
-          id="templateName"
           type="text"
+          id="template-name"
           value={templateName}
           onChange={(e) => setTemplateName(e.target.value)}
-          className="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500"
-          placeholder="Enter template name"
+          className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
+          placeholder="Enter a descriptive name for the template"
           required
         />
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="isGreenscreen"
-          checked={isGreenscreen}
-          onChange={(e) => setIsGreenscreen(e.target.checked)}
-          className="w-4 h-4 text-blue-600 rounded"
+      <div>
+        <div className="flex justify-between items-center mb-2">
+          <label htmlFor="template-explanation" className="block text-sm font-medium text-gray-300">
+            Template Explanation
+          </label>
+          <button
+            type="button"
+            onClick={enhanceDescription}
+            disabled={isEnhancing || !templateExplanation.trim()}
+            className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+          >
+            {isEnhancing ? (
+              <>
+                <svg className="animate-spin h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Enhancing...</span>
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span>Enhance with AI</span>
+              </>
+            )}
+          </button>
+        </div>
+        <textarea
+          ref={textareaRef}
+          id="template-explanation"
+          value={templateExplanation}
+          onChange={(e) => setTemplateExplanation(e.target.value)}
+          className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500 min-h-[120px]"
+          placeholder="Explain how this template should be used, what captions work well, etc."
+          required
         />
-        <label htmlFor="isGreenscreen" className="text-sm font-medium text-gray-700">
-          This is a greenscreen template
-        </label>
+      </div>
+
+      <div>
+        <div className="flex items-center mb-2">
+          <label className="flex items-center text-sm font-medium text-gray-300">
+            <input
+              type="checkbox"
+              checked={isGreenscreen}
+              onChange={(e) => setIsGreenscreen(e.target.checked)}
+              className="mr-2 h-4 w-4"
+            />
+            This is a greenscreen template
+          </label>
+        </div>
       </div>
 
       {isGreenscreen && (
@@ -308,32 +349,6 @@ export function TemplateUploader() {
           </p>
         </div>
       )}
-
-      <div>
-        <label htmlFor="templateExplanation" className="block text-sm font-medium text-gray-700 mb-2">
-          How to Use This Template
-        </label>
-        <div className="space-y-2">
-          <textarea
-            ref={textareaRef}
-            id="templateExplanation"
-            value={templateExplanation}
-            onChange={(e) => setTemplateExplanation(e.target.value)}
-            onPaste={handlePaste}
-            className="w-full px-4 py-2 border rounded-md min-h-[8rem] focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Explain how this meme template works and how to use it effectively... (Paste images here for better AI analysis)"
-            required
-          />
-          <button
-            type="button"
-            onClick={handleEnhanceDescription}
-            disabled={isEnhancing || !templateExplanation.trim()}
-            className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors"
-          >
-            {isEnhancing ? 'Enhancing...' : 'Enhance with AI'}
-          </button>
-        </div>
-      </div>
 
       {pastedImages.length > 0 && (
         <div className="grid grid-cols-2 gap-4">
@@ -359,69 +374,71 @@ export function TemplateUploader() {
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Video File</label>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Template Video
+        </label>
+        
         {preview ? (
-          <div className="rounded-lg overflow-hidden bg-gray-100">
-            <video 
-              src={preview} 
-              controls 
-              className="w-full"
-              style={{ maxHeight: '400px' }}
-            >
-              Your browser does not support the video tag.
-            </video>
-            <button
-              type="button"
-              onClick={() => {
-                setFile(null)
-                setPreview('')
-              }}
-              className="w-full py-2 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium transition-colors"
-            >
-              Change Video
-            </button>
+          <div className="space-y-4">
+            <div className="relative aspect-video rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+              <video
+                src={preview}
+                className="w-full h-full object-contain"
+                controls
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setFile(null)
+                  setPreview('')
+                }}
+                className="absolute top-2 right-2 bg-gray-800 bg-opacity-70 rounded-full p-1 text-white hover:bg-opacity-100"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         ) : (
           <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center ${
+              isDragging ? 'border-blue-500 bg-blue-50 bg-opacity-10' : 'border-gray-700'
+            }`}
             onDragEnter={handleDragIn}
             onDragLeave={handleDragOut}
             onDragOver={handleDrag}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-lg p-6 transition-colors
-              ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}
-              hover:bg-gray-50`}
           >
-            <div className="text-center">
-              <input
-                type="file"
-                accept="video/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) {
-                    setFile(file)
-                    setPreview(URL.createObjectURL(file))
-                  }
-                }}
-                className="hidden"
-                id="video-upload"
-              />
-              <label
-                htmlFor="video-upload"
-                className="cursor-pointer"
-              >
-                <div className="space-y-2">
-                  <div className="flex justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                  </div>
-                  <div className="text-gray-600">
-                    <p className="font-medium">Drag and drop your video here, or click to select</p>
-                    <p className="text-sm">MP4, WebM, or other video formats</p>
-                  </div>
+            <input
+              type="file"
+              accept="video/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) {
+                  setFile(file)
+                  setPreview(URL.createObjectURL(file))
+                }
+              }}
+              className="hidden"
+              id="video-upload"
+            />
+            <label
+              htmlFor="video-upload"
+              className="cursor-pointer"
+            >
+              <div className="space-y-2">
+                <div className="flex justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
                 </div>
-              </label>
-            </div>
+                <div className="text-gray-300">
+                  <p className="font-medium">Drag and drop your video here, or click to select</p>
+                  <p className="text-sm">MP4, WebM, or other video formats</p>
+                </div>
+              </div>
+            </label>
           </div>
         )}
       </div>
@@ -435,7 +452,7 @@ export function TemplateUploader() {
       </button>
 
       {error && (
-        <div className="text-red-600 text-sm mt-2">{error}</div>
+        <div className="text-red-400 text-sm mt-2">{error}</div>
       )}
     </form>
   )

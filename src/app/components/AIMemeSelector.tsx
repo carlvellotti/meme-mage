@@ -303,7 +303,7 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
             <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
           </div>
         </div>
-        <p className="mt-24 text-gray-500">Conjuring memes...</p>
+        <p className="mt-24 text-gray-300">Conjuring memes...</p>
       </div>
     );
   }
@@ -314,18 +314,18 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
         // Phase 1: Initial Form
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Target Audience
             </label>
             <input
               value={audience}
               onChange={(e) => setAudience(e.target.value)}
-              className="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500"
+              className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
               placeholder="e.g. Software developers, gamers, crypto traders..."
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Describe your meme idea
             </label>
             <textarea
@@ -337,14 +337,14 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
                   handleSubmit(e);
                 }
               }}
-              className="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500"
+              className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
               rows={3}
               placeholder="Describe what kind of meme you want to create... (Press Enter to submit, Shift+Enter for new line)"
             />
           </div>
 
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-gray-300">
               <input
                 type="checkbox"
                 checked={isGreenscreenMode}
@@ -356,13 +356,13 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Select AI Model
             </label>
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value as 'openai' | 'anthropic' | 'anthropic-3-5')}
-              className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
             >
               <option value="anthropic-3-5">Claude 3.5 Sonnet</option>
               <option value="anthropic">Claude 3.7 Sonnet</option>
@@ -382,18 +382,18 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
         // Phase 2 & 3: Generated Options
         <div className="grid gap-4 md:grid-cols-2">
           {meme.templates.map((templateData, templateIndex) => (
-            <div key={templateIndex} className="p-4 border rounded-lg bg-gray-50">
-              <h3 className="font-medium mb-4">{templateData.template.name}</h3>
+            <div key={templateIndex} className="p-4 border border-gray-700 rounded-lg bg-gray-800">
+              <h3 className="font-medium mb-4 text-white">{templateData.template.name}</h3>
               
               <div className="space-y-3 mb-6">
-                <h4 className="font-medium text-blue-600">Captions:</h4>
+                <h4 className="font-medium text-blue-400">Captions:</h4>
                 {templateData.captions.map((caption, captionIndex) => (
                   <button
                     key={captionIndex}
                     onClick={() => handleCaptionSelect(templateData.template, caption)}
-                    className="w-full p-3 text-left border rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors flex items-center gap-2"
+                    className="w-full p-3 text-left border border-gray-700 text-white rounded-lg hover:bg-gray-700 hover:border-blue-400 transition-colors flex items-center gap-2"
                   >
-                    <span className="w-6 h-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm">
+                    <span className="w-6 h-6 flex items-center justify-center rounded-full bg-blue-900 text-blue-300 text-sm">
                       {captionIndex + 1}
                     </span>
                     <span>{caption}</span>
@@ -401,7 +401,7 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
                 ))}
               </div>
 
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border border-gray-700 rounded-lg overflow-hidden">
                 <video 
                   src={templateData.template.video_url}
                   className="w-full aspect-video object-cover"

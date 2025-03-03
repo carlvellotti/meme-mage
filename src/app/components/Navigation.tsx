@@ -23,9 +23,9 @@ export default function Navigation() {
     : (routes.find(route => route.path === pathname)?.label || 'Home');
 
   return (
-    <nav className="border-b">
+    <nav className="border-b border-gray-800 bg-black">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between max-w-6xl">
-        <Link href="/" className="text-2xl font-bold">
+        <Link href="/" className="text-2xl font-bold text-white">
           Meme Mage
         </Link>
 
@@ -37,11 +37,11 @@ export default function Navigation() {
               href={route.path}
               className={`relative py-2 text-sm font-medium transition-colors
                 ${(pathname === route.path || (isTemplatePage && route.path === '/template-library'))
-                  ? 'text-blue-600' 
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'text-blue-400' 
+                  : 'text-gray-300 hover:text-white'
                 }
                 ${(pathname === route.path || (isTemplatePage && route.path === '/template-library'))
-                  ? 'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-blue-600' 
+                  ? 'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-blue-400' 
                   : ''
                 }
               `}
@@ -55,7 +55,7 @@ export default function Navigation() {
         <div className="md:hidden relative">
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center space-x-1 text-gray-600"
+            className="flex items-center space-x-1 text-gray-300"
           >
             <span>{currentPage}</span>
             <svg
@@ -75,15 +75,15 @@ export default function Navigation() {
 
           {/* Dropdown Menu */}
           {isOpen && (
-            <div className="absolute right-0 mt-2 py-2 w-48 bg-white rounded-lg shadow-lg border">
+            <div className="absolute right-0 mt-2 py-2 w-48 bg-gray-800 rounded-lg shadow-lg border border-gray-700">
               {routes.map(route => (
                 <Link
                   key={route.path}
                   href={route.path}
                   className={`block px-4 py-2 text-sm ${
                     (pathname === route.path || (isTemplatePage && route.path === '/template-library'))
-                      ? 'bg-gray-100 text-gray-900 font-medium'
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-gray-700 text-white font-medium'
+                      : 'text-gray-300 hover:bg-gray-700'
                   }`}
                   onClick={() => setIsOpen(false)}
                 >

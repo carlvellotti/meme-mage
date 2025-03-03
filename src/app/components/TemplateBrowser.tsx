@@ -6,7 +6,7 @@ import { nameToSlug } from '@/lib/utils/slugUtils';
 import { useRouter } from 'next/navigation';
 
 interface Props {
-  onSelectTemplate: (template: MemeTemplate) => void;
+  onSelectTemplate?: (template: MemeTemplate) => void;
   onCreateFromTemplate?: (template: MemeTemplate, caption: string, allOptions: any) => void;
   isGreenscreenMode?: boolean;
   onToggleMode?: () => void;
@@ -81,11 +81,11 @@ export default function TemplateBrowser({
     }
 
     return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
+      if (observerRef.current && loadingRef.current) {
+        observerRef.current.unobserve(loadingRef.current);
       }
     };
-  }, [visibleTemplates.length, templates.length]);
+  }, [visibleTemplates, templates]);
 
   const handleCardClick = (template: MemeTemplate) => {
     router.push(`/template/${nameToSlug(template.name)}`);
@@ -99,16 +99,16 @@ export default function TemplateBrowser({
     setHoveredTemplate(null);
   };
 
-  if (isLoading) return <div>Loading templates...</div>;
-  if (error) return <div>Error: {error}</div>;
+  if (isLoading) return <div className="text-gray-300">Loading templates...</div>;
+  if (error) return <div className="text-red-400">Error: {error}</div>;
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Templates</h2>
+        <h2 className="text-xl font-semibold text-white">Templates</h2>
         <button 
           onClick={refreshTemplates}
-          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors flex items-center space-x-1"
+          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center space-x-1"
           disabled={isRefreshing}
         >
           <svg 
@@ -136,10 +136,10 @@ export default function TemplateBrowser({
           return (
             <div
               key={template.id}
-              className={`border rounded-lg p-4 cursor-pointer transition-all duration-300 ${
+              className={`border border-gray-700 rounded-lg p-4 cursor-pointer transition-all duration-300 ${
                 isHovered 
-                  ? 'border-blue-500 shadow-lg z-10 bg-white' 
-                  : 'hover:border-blue-500 hover:shadow-md'
+                  ? 'border-blue-400 shadow-lg z-10 bg-gray-700' 
+                  : 'hover:border-blue-400 hover:shadow-md'
               }`}
               onClick={(e) => {
                 // Only navigate if the click wasn't on the video
@@ -152,48 +152,53 @@ export default function TemplateBrowser({
             >
               {/* Title - full when hovered, truncated otherwise */}
               <h3 
-                className={`font-medium text-lg mb-3 ${isHovered ? '' : 'truncate'}`}
+                className={`font-medium text-white text-lg mb-3 ${isHovered ? '' : 'truncate'}`}
                 title={template.name}
               >
                 {template.name}
               </h3>
-              
+
               {/* Video container with improved transition */}
               <div 
-                className="relative overflow-hidden rounded"
+                className="relative overflow-hidden rounded-md bg-gray-800"
                 style={{
                   maxHeight: isHovered ? '1000px' : '180px',
                   transition: 'max-height 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
                   willChange: 'max-height'
                 }}
               >
-                <div className="video-wrapper">
-                  <video
-                    src={template.video_url}
-                    className={`rounded w-full ${
-                      isHovered ? 'object-contain' : 'object-cover h-full'
-                    }`}
-                    style={{
-                      aspectRatio: isHovered ? 'auto' : '16/9',
-                      transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
-                    }}
-                    controls
-                    onClick={(e) => e.stopPropagation()} // Allow video controls to work without navigating
-                    preload="metadata"
-                  />
-                </div>
+                <video
+                  src={template.video_url}
+                  className={`rounded w-full ${
+                    isHovered ? 'object-contain' : 'object-cover h-full'
+                  }`}
+                  style={{
+                    aspectRatio: isHovered ? 'auto' : '16/9',
+                    transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                  controls
+                  onClick={(e) => e.stopPropagation()} // Allow video controls to work without navigating
+                  preload="metadata"
+                />
               </div>
             </div>
           );
         })}
-        
-        {/* Loading indicator for infinite scroll */}
-        {visibleTemplates.length < templates.length && (
-          <div ref={loadingRef} className="col-span-full flex justify-center py-4">
-            <div className="animate-pulse text-gray-400">Loading more templates...</div>
-          </div>
-        )}
       </div>
+
+      {/* Loading element for infinite scroll */}
+      {visibleTemplates.length < templates.length && (
+        <div ref={loadingRef} className="col-span-full flex justify-center py-4">
+          <div className="text-gray-400">Loading more templates...</div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {templates.length === 0 && !isLoading && (
+        <div className="text-center py-8 text-gray-300">
+          <p>No templates found.</p>
+        </div>
+      )}
     </div>
   );
 } 
