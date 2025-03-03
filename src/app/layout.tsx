@@ -20,7 +20,7 @@ export default function RootLayout({
   const timestamp = Date.now();
   
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <head>
         {/* 
           Favicon troubleshooting notes:
@@ -42,12 +42,20 @@ export default function RootLayout({
           sizes="256x256"
         />
       </head>
-      <body className={`min-h-screen bg-gray-50 ${inter.className}`}>
+      <body className={`min-h-screen bg-gray-900 text-gray-100 ${inter.className}`}>
         <Navigation />
         <main className="container mx-auto px-4 md:px-8 lg:px-12 max-w-7xl">
           {children}
         </main>
-        <Toaster />
+        <Toaster 
+          toastOptions={{
+            style: {
+              background: '#374151', // gray-700
+              color: '#F3F4F6', // gray-100
+              borderRadius: '0.375rem',
+            },
+          }}
+        />
       </body>
     </html>
   );

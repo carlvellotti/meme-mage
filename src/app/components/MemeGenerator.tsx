@@ -330,14 +330,14 @@ export default function MemeGenerator({
   return (
     <div className="relative space-y-8">
       {isDownloading && (
-        <div className="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-50 flex-col">
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 flex-col">
           <div className="relative">
             <BackgroundSVG width={300} height={300} />
             <div style={{ marginTop: '-30px' }}>
               <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
             </div>
           </div>
-          <p className="mt-24 text-gray-500">Conjuring your meme...</p>
+          <p className="mt-24 text-gray-300">Conjuring your meme...</p>
         </div>
       )}
       
@@ -353,7 +353,7 @@ export default function MemeGenerator({
           <div className="flex justify-between items-center">
             <button 
               onClick={handleBack} 
-              className="flex items-center text-blue-600 hover:text-blue-800"
+              className="flex items-center text-blue-400 hover:text-blue-300"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
@@ -386,35 +386,35 @@ export default function MemeGenerator({
             </button>
           </div>
 
-          <div className="border rounded-lg p-4 bg-white">
+          <div className="border border-gray-700 rounded-lg p-4 bg-gray-800">
             <div className="flex flex-col lg:flex-row gap-8">
               <div className="w-full lg:w-1/2 space-y-4">
-                <h2 className="text-lg font-medium mb-2">Editor</h2>
+                <h2 className="text-lg font-medium mb-2 text-white">Editor</h2>
                 
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">
+                  <h3 className="text-sm font-medium text-gray-300 mb-2">
                     Caption
                   </h3>
                   <textarea
                     value={caption}
                     onChange={(e) => setCaption(e.target.value)}
-                    className="w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
                     rows={3}
                     placeholder="Enter your caption..."
                   />
                 </div>
 
                 <details className="mt-2">
-                  <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-900">
+                  <summary className="cursor-pointer text-sm text-gray-300 hover:text-white">
                     Caption Settings
                   </summary>
                   <div className="mt-3 space-y-4 pl-2">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Font</label>
+                      <label className="block text-xs text-gray-300 mb-1">Font</label>
                       <select
                         value={textSettings.font}
                         onChange={(e) => updateTextSetting('font', e.target.value)}
-                        className="w-full p-2 text-sm border rounded-md focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 text-sm border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="Impact">Impact (Classic Meme)</option>
                         <option value="Arial Black">Arial Black</option>
@@ -432,7 +432,7 @@ export default function MemeGenerator({
                     </div>
 
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Size</label>
+                      <label className="block text-xs text-gray-300 mb-1">Size</label>
                       <div className="flex items-center gap-2">
                         <input
                           type="range"
@@ -442,12 +442,12 @@ export default function MemeGenerator({
                           onChange={(e) => updateTextSetting('size', parseInt(e.target.value))}
                           className="flex-1"
                         />
-                        <span className="text-sm text-gray-600 w-12">{textSettings.size}</span>
+                        <span className="text-sm text-gray-300 w-12">{textSettings.size}</span>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Vertical Position (%)</label>
+                      <label className="block text-xs text-gray-300 mb-1">Vertical Position (%)</label>
                       <div className="flex items-center gap-2">
                         <input
                           type="range"
@@ -457,12 +457,12 @@ export default function MemeGenerator({
                           onChange={(e) => updateTextSetting('verticalPosition', parseInt(e.target.value))}
                           className="flex-1"
                         />
-                        <span className="text-sm text-gray-600 w-12">{textSettings.verticalPosition}%</span>
+                        <span className="text-sm text-gray-300 w-12">{textSettings.verticalPosition}%</span>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Text Alignment</label>
+                      <label className="block text-xs text-gray-300 mb-1">Text Alignment</label>
                       <div className="flex gap-0 border rounded-md overflow-hidden">
                         <button
                           onClick={() => updateTextSetting('alignment', 'left')}
@@ -500,7 +500,7 @@ export default function MemeGenerator({
                     </div>
 
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Text Color</label>
+                      <label className="block text-xs text-gray-300 mb-1">Text Color</label>
                       <div className="flex gap-0 border rounded-md overflow-hidden">
                         <button
                           onClick={() => updateTextSetting('color', 'white')}
@@ -537,7 +537,7 @@ export default function MemeGenerator({
                     </div>
 
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Stroke Weight</label>
+                      <label className="block text-xs text-gray-300 mb-1">Stroke Weight</label>
                       <div className="flex items-center gap-2">
                         <input
                           type="range"
@@ -547,7 +547,7 @@ export default function MemeGenerator({
                           onChange={(e) => updateTextSetting('strokeWeight', parseInt(e.target.value) / 100)}
                           className="flex-1"
                         />
-                        <span className="text-sm text-gray-600 w-12">{Math.round(textSettings.strokeWeight * 100)}%</span>
+                        <span className="text-sm text-gray-300 w-12">{Math.round(textSettings.strokeWeight * 100)}%</span>
                       </div>
                     </div>
                   </div>
@@ -555,7 +555,7 @@ export default function MemeGenerator({
 
                 <div>
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-sm font-medium text-gray-700">Labels</h3>
+                    <h3 className="text-sm font-medium text-gray-300">Labels</h3>
                     <button
                       onClick={addLabel}
                       className="px-3 py-1 text-sm bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100"
@@ -565,7 +565,7 @@ export default function MemeGenerator({
                   </div>
 
                   {labels.map(label => (
-                    <div key={label.id} className="space-y-3 mb-4 p-3 bg-gray-50 rounded-lg">
+                    <div key={label.id} className="space-y-3 mb-4 p-3 bg-gray-700 rounded-lg">
                       <input
                         type="text"
                         value={label.text}
@@ -576,7 +576,7 @@ export default function MemeGenerator({
 
                       <div className="flex gap-4">
                         <div className="flex-1">
-                          <label className="block text-xs text-gray-600 mb-1">Horizontal</label>
+                          <label className="block text-xs text-gray-300 mb-1">Horizontal</label>
                           <div className="flex items-center gap-2">
                             <input
                               type="range"
@@ -586,12 +586,12 @@ export default function MemeGenerator({
                               onChange={(e) => updateLabel(label.id, { horizontalPosition: parseInt(e.target.value) })}
                               className="flex-1"
                             />
-                            <span className="text-sm text-gray-600 w-12">{label.horizontalPosition}%</span>
+                            <span className="text-sm text-gray-300 w-12">{label.horizontalPosition}%</span>
                           </div>
                         </div>
 
                         <div className="flex-1">
-                          <label className="block text-xs text-gray-600 mb-1">Vertical</label>
+                          <label className="block text-xs text-gray-300 mb-1">Vertical</label>
                           <div className="flex items-center gap-2">
                             <input
                               type="range"
@@ -601,7 +601,7 @@ export default function MemeGenerator({
                               onChange={(e) => updateLabel(label.id, { verticalPosition: parseInt(e.target.value) })}
                               className="flex-1"
                             />
-                            <span className="text-sm text-gray-600 w-12">{label.verticalPosition}%</span>
+                            <span className="text-sm text-gray-300 w-12">{label.verticalPosition}%</span>
                           </div>
                         </div>
                       </div>
@@ -619,12 +619,12 @@ export default function MemeGenerator({
 
                   {labels.length > 0 && (
                     <details className="mt-4 mb-6">
-                      <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-900">
+                      <summary className="cursor-pointer text-sm text-gray-300 hover:text-white">
                         Label Style (All Labels)
                       </summary>
-                      <div className="mt-3 space-y-4 pl-2 p-3 bg-gray-50 rounded-lg">
+                      <div className="mt-3 space-y-4 pl-2 p-3 bg-gray-700 rounded-lg">
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">Font</label>
+                          <label className="block text-xs text-gray-300 mb-1">Font</label>
                           <select
                             value={labelSettings.font}
                             onChange={(e) => updateLabelSetting('font', e.target.value)}
@@ -646,7 +646,7 @@ export default function MemeGenerator({
                         </div>
 
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">Size</label>
+                          <label className="block text-xs text-gray-300 mb-1">Size</label>
                           <div className="flex items-center gap-2">
                             <input
                               type="range"
@@ -656,12 +656,12 @@ export default function MemeGenerator({
                               onChange={(e) => updateLabelSetting('size', parseInt(e.target.value))}
                               className="flex-1"
                             />
-                            <span className="text-sm text-gray-600 w-12">{labelSettings.size}</span>
+                            <span className="text-sm text-gray-300 w-12">{labelSettings.size}</span>
                           </div>
                         </div>
 
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">Text Color</label>
+                          <label className="block text-xs text-gray-300 mb-1">Text Color</label>
                           <div className="flex gap-0 border rounded-md overflow-hidden">
                             <button
                               onClick={() => updateLabelSetting('color', 'white')}
@@ -698,7 +698,7 @@ export default function MemeGenerator({
                         </div>
 
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">Stroke Weight</label>
+                          <label className="block text-xs text-gray-300 mb-1">Stroke Weight</label>
                           <div className="flex items-center gap-2">
                             <input
                               type="range"
@@ -708,7 +708,7 @@ export default function MemeGenerator({
                               onChange={(e) => updateLabelSetting('strokeWeight', parseInt(e.target.value) / 100)}
                               className="flex-1"
                             />
-                            <span className="text-sm text-gray-600 w-12">{Math.round(labelSettings.strokeWeight * 100)}%</span>
+                            <span className="text-sm text-gray-300 w-12">{Math.round(labelSettings.strokeWeight * 100)}%</span>
                           </div>
                         </div>
                       </div>
@@ -721,7 +721,7 @@ export default function MemeGenerator({
                     // Greenscreen layout - two tall columns
                     <>
                       <div className="w-[200px] flex-shrink-0">
-                        <h3 className="text-sm font-medium text-gray-700 mb-2">Video</h3>
+                        <h3 className="text-sm font-medium text-gray-300 mb-2">Video</h3>
                         <video
                           ref={previewVideoRef}
                           src={selectedTemplate.video_url}
@@ -751,13 +751,13 @@ export default function MemeGenerator({
                         ) : (
                           <button 
                             onClick={() => setIsUnsplashPickerOpen(true)}
-                            className="w-full aspect-[9/16] flex flex-col items-center justify-center border-2 border-dashed rounded-lg hover:bg-gray-50 transition-all group relative overflow-hidden"
+                            className="w-full aspect-[9/16] flex flex-col items-center justify-center border-2 border-dashed border-gray-700 rounded-lg hover:bg-gray-700 transition-all group relative overflow-hidden"
                           >
-                            <div className="absolute inset-0 bg-gradient-to-b from-gray-50 to-white opacity-50" />
+                            <div className="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900 opacity-50" />
                             <div className="relative flex flex-col items-center">
-                              <div className="p-2 rounded-full bg-blue-50 mb-3 group-hover:bg-blue-100 transition-colors">
+                              <div className="p-2 rounded-full bg-blue-900 mb-3 group-hover:bg-blue-800 transition-colors">
                                 <svg 
-                                  className="w-5 h-5 text-blue-600" 
+                                  className="w-5 h-5 text-blue-400" 
                                   fill="none" 
                                   stroke="currentColor" 
                                   viewBox="0 0 24 24"
@@ -765,7 +765,7 @@ export default function MemeGenerator({
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                 </svg>
                               </div>
-                              <p className="text-sm font-medium text-gray-900">Choose background</p>
+                              <p className="text-sm font-medium text-gray-300">Choose background</p>
                               <p className="text-xs text-gray-500 mt-1">Add an image for your greenscreen</p>
                             </div>
                           </button>
@@ -775,7 +775,7 @@ export default function MemeGenerator({
                   ) : (
                     // Non-greenscreen layout - single wide video
                     <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Video</h3>
+                      <h3 className="text-sm font-medium text-gray-300 mb-2">Video</h3>
                       <video
                         ref={previewVideoRef}
                         src={selectedTemplate.video_url}
@@ -836,7 +836,7 @@ export default function MemeGenerator({
                           type="text" 
                           value={`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution && 'instagram_username' in selectedBackground.attribution && selectedBackground.attribution.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`}
                           readOnly 
-                          className="text-xs px-3 py-2 border rounded w-full pr-10 bg-gray-50"
+                          className="text-xs px-3 py-2 border rounded w-full pr-10 bg-gray-700"
                         />
                         <button
                           onClick={() => {
@@ -859,21 +859,21 @@ export default function MemeGenerator({
 
           {generatedOptions && (
             <div>
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Other Options</h2>
+              <h2 className="text-lg font-medium text-gray-300 mb-4">Other Options</h2>
               <div className="grid gap-4 md:grid-cols-2">
                 {generatedOptions.templates.map((templateData: TemplateData, templateIndex: number) => (
-                  <div key={templateIndex} className="p-4 border rounded-lg bg-gray-50">
-                    <h3 className="font-medium mb-4">{templateData.template.name}</h3>
+                  <div key={templateIndex} className="p-4 border border-gray-700 rounded-lg bg-gray-800">
+                    <h3 className="font-medium mb-4 text-white">{templateData.template.name}</h3>
                     
                     <div className="space-y-3 mb-6">
-                      <h4 className="font-medium text-blue-600">Captions:</h4>
+                      <h4 className="font-medium text-blue-400">Captions:</h4>
                       {templateData.captions.map((captionOption: string, captionIndex: number) => (
                         <button
                           key={captionIndex}
                           onClick={() => handleCreateFromTemplate(templateData.template, captionOption, generatedOptions)}
-                          className="w-full p-3 text-left border rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors flex items-center gap-2"
+                          className="w-full p-3 text-left border border-gray-700 text-white rounded-lg hover:bg-gray-700 hover:border-blue-400 transition-colors flex items-center gap-2"
                         >
-                          <span className="w-6 h-6 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm">
+                          <span className="w-6 h-6 flex items-center justify-center rounded-full bg-blue-900 text-blue-300 text-sm">
                             {captionIndex + 1}
                           </span>
                           <span>{captionOption}</span>
@@ -881,7 +881,7 @@ export default function MemeGenerator({
                       ))}
                     </div>
 
-                    <div className="border rounded-lg overflow-hidden">
+                    <div className="border border-gray-700 rounded-lg overflow-hidden">
                       <video 
                         src={templateData.template.video_url}
                         className="w-full aspect-video object-cover"

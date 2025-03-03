@@ -11,7 +11,7 @@ export default function MemeDatabase() {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-gray-800 rounded-lg shadow border border-gray-700 p-6">
       <TemplateBrowser 
         onSelectTemplate={handleSelectTemplate}
       />

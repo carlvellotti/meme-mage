@@ -10,10 +10,10 @@ export default function Home() {
   return (
     <div className="py-8 md:py-12">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-4">AI Meme Mage</h1>
-        <p className="text-gray-600 mb-8">
+        <h1 className="text-3xl font-bold mb-4 text-white">AI Meme Mage</h1>
+        <p className="text-gray-300 mb-8">
           Create custom memes using AI. Enter your target audience and meme idea, and we'll help you generate the perfect meme.
-          Or <Link href="/template-library" className="text-blue-600 hover:underline">browse our template library</Link> to create memes from specific templates.
+          Or <Link href="/template-library" className="text-blue-400 hover:underline">browse our template library</Link> to create memes from specific templates.
         </p>
         <MemeGenerator 
           isGreenscreenMode={isGreenscreenMode} 
