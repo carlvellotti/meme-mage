@@ -321,6 +321,7 @@ export function TemplateUploader() {
           id="template-explanation"
           value={templateExplanation}
           onChange={(e) => setTemplateExplanation(e.target.value)}
+          onPaste={handlePaste}
           className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500 min-h-[120px]"
           placeholder="Explain how this template should be used, what captions work well, etc."
           required
