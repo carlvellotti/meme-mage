@@ -85,7 +85,7 @@ If a tool called "generate_template_response" is available, use it to structure 
 
 export const getTemplateAnalysisPrompt = () => `You are a meme template creator. Create a detailed description template of this meme based on the images and context I provide. Your description should help match user concepts with appropriate meme templates.
 
-Structure your analysis as follows:
+Structure your analysis as follows, keeping all your bullets succint:
 
 1. TRANSCRIPT: If provided, include the transcript of the video. If not provided, just skip this section.
 
