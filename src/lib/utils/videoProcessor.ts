@@ -340,8 +340,13 @@ function drawCaption(
     ? fontSize * textSettings.strokeWeight 
     : fontSize * 0.08;
 
+  // Adjust vertical position to account for multiple lines
+  // This ensures the BOTTOM of the LAST line is at the specified vertical position
+  const totalTextHeight = lineHeight * (lines.length - 1);
+  const adjustedTextY = textY - totalTextHeight;
+
   lines.forEach((line, index) => {
-    const y = textY + (index * lineHeight);
+    const y = adjustedTextY + (index * lineHeight);
     
     // Set stroke color to be opposite of text color for better visibility
     ctx.strokeStyle = textColor === 'white' ? '#000000' : '#FFFFFF';

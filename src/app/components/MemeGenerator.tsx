@@ -88,7 +88,7 @@ export default function MemeGenerator({
   const [textSettings, setTextSettings] = useState<TextSettings>({
     size: 78,
     font: 'Impact',
-    verticalPosition: 25,
+    verticalPosition: isGreenscreenMode ? 25 : 25,
     alignment: 'center',
     color: 'white',
     strokeWeight: 0.08,
@@ -110,6 +110,9 @@ export default function MemeGenerator({
     color: 'white',
     strokeWeight: 0.08,
   });
+
+  // Add a ref to track if the position has been calculated for this template
+  const hasCalculatedPositionRef = useRef<string | null>(null);
 
   // Add debug logging for attribution
   useEffect(() => {
@@ -159,6 +162,95 @@ export default function MemeGenerator({
       updatePreview();
     }
   }, []);
+
+  // Update the useEffect hook for caption positioning
+  useEffect(() => {
+    if (!isGreenscreenMode && selectedTemplate) {
+      // Skip if we've already calculated for this template
+      if (hasCalculatedPositionRef.current === selectedTemplate.id) {
+        return;
+      }
+      
+      /**
+       * Caption Placement Algorithm
+       * 
+       * For non-greenscreen (regular) mode, we automatically position the caption 15px above
+       * the top edge of the video. This creates a visually pleasing default position that works
+       * well with most templates. Key aspects of this approach:
+       * 
+       * 1. The BOTTOM of the LAST LINE of text is positioned 15px above the video
+       * 2. We calculate what percentage of the canvas height this position represents
+       * 3. We handle multiple lines of text through additional logic in the drawing functions
+       * 
+       * For greenscreen mode, we use a fixed 25% from the top which works better with the
+       * full-height video + background composition.
+       * 
+       * This positioning is only calculated once per template and stored in a ref to avoid
+       * unnecessary recalculations that could lead to performance issues or visual jitter.
+       * 
+       * Note: The drawing code in previewGenerator.ts and videoProcessor.ts has been updated
+       * to ensure the BOTTOM of the LAST line is at the specified position.
+       */
+      const calculatePositionAboveVideo = async () => {
+        try {
+          // Create a temporary video element to get dimensions
+          const video = document.createElement('video');
+          video.src = selectedTemplate.video_url;
+          
+          await new Promise<void>((resolve) => {
+            video.onloadedmetadata = () => resolve();
+            video.onerror = () => resolve(); // Continue even if there's an error
+          });
+          
+          // Standard canvas dimensions used for all meme generation (fixed aspect ratio of 9:16)
+          const canvasHeight = 1920;
+          const videoAspect = video.videoWidth / video.videoHeight || 16/9; // Fallback to 16:9 if dimensions can't be read
+          const targetWidth = 1080;
+          const targetHeight = targetWidth / videoAspect;
+          
+          // For non-greenscreen mode, the video is centered vertically in the canvas
+          // yOffset represents the space from the top of the canvas to the top of the video
+          const yOffset = (canvasHeight - targetHeight) / 2;
+          
+          // Calculate position 15px above the top of the video
+          const topOfVideo = yOffset;
+          const positionAbove = topOfVideo - 15;
+          
+          // Convert absolute pixel position to a percentage of canvas height
+          // This makes the positioning work regardless of the actual rendered size
+          const positionPercentage = Math.round((positionAbove / canvasHeight) * 100);
+          
+          // Update the text settings with the calculated percentage
+          setTextSettings(prev => ({
+            ...prev,
+            verticalPosition: positionPercentage
+          }));
+          
+          // Track that we've calculated for this template to avoid redundant calculations
+          hasCalculatedPositionRef.current = selectedTemplate.id;
+          
+          // Call updatePreview after a short delay to ensure state has updated
+          setTimeout(() => {
+            updatePreview();
+          }, 100);
+        } catch (error) {
+          console.error('Error calculating caption position:', error);
+        }
+      };
+      
+      calculatePositionAboveVideo();
+    } else if (isGreenscreenMode) {
+      // Reset to default 25% for greenscreen mode
+      // For greenscreen templates, a fixed position works better as the video takes the full height
+      setTextSettings(prev => ({
+        ...prev,
+        verticalPosition: 25
+      }));
+      
+      // Clear the ref when switching to greenscreen mode to allow recalculation if needed
+      hasCalculatedPositionRef.current = null;
+    }
+  }, [isGreenscreenMode, selectedTemplate]);
 
   const handleAISelection = (template: MemeTemplate, aiCaption: string, allOptions: SelectedMeme) => {
     setSelectedTemplate(template);
@@ -398,7 +490,7 @@ export default function MemeGenerator({
                   <textarea
                     value={caption}
                     onChange={(e) => setCaption(e.target.value)}
-                    className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-3 border border-gray-600 bg-gray-900 text-white rounded-md focus:ring-2 focus:ring-blue-500"
                     rows={3}
                     placeholder="Enter your caption..."
                   />
@@ -414,7 +506,7 @@ export default function MemeGenerator({
                       <select
                         value={textSettings.font}
                         onChange={(e) => updateTextSetting('font', e.target.value)}
-                        className="w-full p-2 text-sm border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 text-sm border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="Impact">Impact (Classic Meme)</option>
                         <option value="Arial Black">Arial Black</option>
@@ -571,7 +663,7 @@ export default function MemeGenerator({
                         value={label.text}
                         onChange={(e) => updateLabel(label.id, { text: e.target.value })}
                         placeholder="Enter label text..."
-                        className="w-full p-2 text-sm border rounded-md focus:ring-2 focus:ring-blue-500"
+                        className="w-full p-2 text-sm border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-2 focus:ring-blue-500"
                       />
 
                       <div className="flex gap-4">
@@ -628,7 +720,7 @@ export default function MemeGenerator({
                           <select
                             value={labelSettings.font}
                             onChange={(e) => updateLabelSetting('font', e.target.value)}
-                            className="w-full p-2 text-sm border rounded-md focus:ring-2 focus:ring-blue-500"
+                            className="w-full p-2 text-sm border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="Impact">Impact (Classic Meme)</option>
                             <option value="Arial Black">Arial Black</option>
