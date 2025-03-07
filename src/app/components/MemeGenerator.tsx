@@ -104,12 +104,17 @@ export default function MemeGenerator({
     size: number;
     color: 'white' | 'black';
     strokeWeight: number;
+    backgroundColor: 'black' | 'white' | 'transparent';
+    backgroundOpacity: number;
   }>({
     font: 'Impact',
     size: 78,
     color: 'white',
     strokeWeight: 0.08,
+    backgroundColor: 'black',
+    backgroundOpacity: 0.5,
   });
+  const [isCropped, setIsCropped] = useState(false);
 
   // Add a ref to track if the position has been calculated for this template
   const hasCalculatedPositionRef = useRef<string | null>(null);
@@ -150,6 +155,17 @@ export default function MemeGenerator({
     }
   }, [isGreenscreenMode]);
 
+  // Add effect to update preview when crop state changes
+  useEffect(() => {
+    if (selectedTemplate && caption) {
+      // Small delay to ensure state updates are complete
+      setTimeout(() => {
+        updatePreview();
+      }, 50);
+    }
+  }, [isCropped]);
+
+  // Existing effect for preview updates
   useEffect(() => {
     if (selectedTemplate && (caption || labels.length > 0)) {
       updatePreview();
@@ -163,7 +179,52 @@ export default function MemeGenerator({
     }
   }, []);
 
-  // Update the useEffect hook for caption positioning
+  // Add useEffect to calculate caption position on initial template load
+  useEffect(() => {
+    if (!isGreenscreenMode && selectedTemplate && hasCalculatedPositionRef.current !== selectedTemplate.id) {
+      calculateCaptionPosition();
+    }
+  }, [selectedTemplate, isGreenscreenMode]);
+
+  // Extract caption position calculation into a reusable function
+  const calculateCaptionPosition = async () => {
+    if (!selectedTemplate) return;
+    
+    try {
+      const video = document.createElement('video');
+      video.src = selectedTemplate.video_url;
+      
+      await new Promise<void>((resolve) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => resolve();
+      });
+      
+      const canvasHeight = 1920;
+      const videoAspect = video.videoWidth / video.videoHeight || 16/9;
+      const targetWidth = 1080;
+      const targetHeight = targetWidth / videoAspect;
+      const yOffset = (canvasHeight - targetHeight) / 2;
+      const topOfVideo = yOffset;
+      const positionAbove = topOfVideo - 15;
+      const positionPercentage = Math.round((positionAbove / canvasHeight) * 100);
+      
+      setTextSettings(prev => ({
+        ...prev,
+        verticalPosition: positionPercentage
+      }));
+      
+      hasCalculatedPositionRef.current = selectedTemplate.id;
+      
+      // Update preview after a short delay to ensure state has updated
+      setTimeout(() => {
+        updatePreview();
+      }, 100);
+    } catch (error) {
+      console.error('Error calculating caption position:', error);
+    }
+  };
+
+  // Update useEffect for caption positioning to use the new function
   useEffect(() => {
     if (!isGreenscreenMode && selectedTemplate) {
       // Skip if we've already calculated for this template
@@ -191,54 +252,7 @@ export default function MemeGenerator({
        * Note: The drawing code in previewGenerator.ts and videoProcessor.ts has been updated
        * to ensure the BOTTOM of the LAST line is at the specified position.
        */
-      const calculatePositionAboveVideo = async () => {
-        try {
-          // Create a temporary video element to get dimensions
-          const video = document.createElement('video');
-          video.src = selectedTemplate.video_url;
-          
-          await new Promise<void>((resolve) => {
-            video.onloadedmetadata = () => resolve();
-            video.onerror = () => resolve(); // Continue even if there's an error
-          });
-          
-          // Standard canvas dimensions used for all meme generation (fixed aspect ratio of 9:16)
-          const canvasHeight = 1920;
-          const videoAspect = video.videoWidth / video.videoHeight || 16/9; // Fallback to 16:9 if dimensions can't be read
-          const targetWidth = 1080;
-          const targetHeight = targetWidth / videoAspect;
-          
-          // For non-greenscreen mode, the video is centered vertically in the canvas
-          // yOffset represents the space from the top of the canvas to the top of the video
-          const yOffset = (canvasHeight - targetHeight) / 2;
-          
-          // Calculate position 15px above the top of the video
-          const topOfVideo = yOffset;
-          const positionAbove = topOfVideo - 15;
-          
-          // Convert absolute pixel position to a percentage of canvas height
-          // This makes the positioning work regardless of the actual rendered size
-          const positionPercentage = Math.round((positionAbove / canvasHeight) * 100);
-          
-          // Update the text settings with the calculated percentage
-          setTextSettings(prev => ({
-            ...prev,
-            verticalPosition: positionPercentage
-          }));
-          
-          // Track that we've calculated for this template to avoid redundant calculations
-          hasCalculatedPositionRef.current = selectedTemplate.id;
-          
-          // Call updatePreview after a short delay to ensure state has updated
-          setTimeout(() => {
-            updatePreview();
-          }, 100);
-        } catch (error) {
-          console.error('Error calculating caption position:', error);
-        }
-      };
-      
-      calculatePositionAboveVideo();
+      calculateCaptionPosition();
     } else if (isGreenscreenMode) {
       // Reset to default 25% for greenscreen mode
       // For greenscreen templates, a fixed position works better as the video takes the full height
@@ -256,6 +270,7 @@ export default function MemeGenerator({
     setSelectedTemplate(template);
     setCaption(aiCaption);
     setGeneratedOptions(allOptions);
+    setIsCropped(false);
   };
 
   const handleBack = () => {
@@ -287,7 +302,8 @@ export default function MemeGenerator({
         isGreenscreenMode,
         textSettings,
         labels,
-        labelSettings
+        labelSettings,
+        isCropped
       );
 
       // Create download link and trigger download immediately
@@ -320,6 +336,14 @@ export default function MemeGenerator({
     if (!selectedTemplate) return;
     
     try {
+      // If we're in crop mode but haven't calculated the position yet, do it first
+      if (isCropped && hasCalculatedPositionRef.current !== selectedTemplate.id) {
+        await calculateCaptionPosition();
+        // The preview will be updated in the calculateCaptionPosition function
+        return;
+      }
+      
+      // Generate a new preview canvas
       const canvas = await createMemePreview(
         selectedTemplate.video_url,
         caption,
@@ -327,15 +351,23 @@ export default function MemeGenerator({
         isGreenscreenMode,
         textSettings,
         labels,
-        labelSettings
+        labelSettings,
+        isCropped
       );
       
-      // Force a re-render of the preview
+      // When previewCanvas exists, update its content, otherwise set the new canvas
       if (previewCanvas) {
-        const ctx = previewCanvas.getContext('2d');
-        ctx?.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-        ctx?.drawImage(canvas, 0, 0);
+        // If dimensions have changed (which happens during crop toggle), recreate the canvas
+        if (previewCanvas.width !== canvas.width || previewCanvas.height !== canvas.height) {
+          setPreviewCanvas(canvas);
+        } else {
+          // Just update the existing canvas content if dimensions are the same
+          const ctx = previewCanvas.getContext('2d');
+          ctx?.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+          ctx?.drawImage(canvas, 0, 0);
+        }
       } else {
+        // Set the new canvas 
         setPreviewCanvas(canvas);
       }
     } catch (error) {
@@ -417,6 +449,36 @@ export default function MemeGenerator({
     setSelectedTemplate(template);
     setCaption(aiCaption);
     setGeneratedOptions(allOptions);
+    setIsCropped(false);
+    updatePreview();
+  };
+
+  // Toggle crop state
+  const toggleCrop = () => {
+    // Only allow cropping for non-greenscreen videos
+    if (!isGreenscreenMode) {
+      const newCropState = !isCropped;
+      setIsCropped(newCropState);
+      
+      // Force a complete canvas recreation by setting previewCanvas to null first
+      setPreviewCanvas(null);
+      
+      // If switching to cropped mode, make sure caption position is locked
+      if (newCropState) {
+        // Calculate top position if not already set
+        if (hasCalculatedPositionRef.current !== selectedTemplate?.id) {
+          calculateCaptionPosition();
+        } else {
+          // Position already calculated, just update preview
+          setTimeout(() => {
+            updatePreview();
+          }, 10);
+        }
+      } else {
+        // Switching to uncropped mode, reset to default position
+        calculateCaptionPosition();
+      }
+    }
   };
 
   return (
@@ -538,20 +600,22 @@ export default function MemeGenerator({
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs text-gray-300 mb-1">Vertical Position (%)</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min="5"
-                          max="95"
-                          value={textSettings.verticalPosition}
-                          onChange={(e) => updateTextSetting('verticalPosition', parseInt(e.target.value))}
-                          className="flex-1"
-                        />
-                        <span className="text-sm text-gray-300 w-12">{textSettings.verticalPosition}%</span>
+                    {!isCropped && (
+                      <div>
+                        <label className="block text-xs text-gray-300 mb-1">Vertical Position</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min="2"
+                            max="95"
+                            value={textSettings.verticalPosition}
+                            onChange={(e) => updateTextSetting('verticalPosition', parseInt(e.target.value))}
+                            className="flex-1"
+                          />
+                          <span className="text-sm text-gray-300 w-12">{textSettings.verticalPosition}%</span>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div>
                       <label className="block text-xs text-gray-300 mb-1">Text Alignment</label>
@@ -790,6 +854,76 @@ export default function MemeGenerator({
                         </div>
 
                         <div>
+                          <label className="block text-xs text-gray-300 mb-1">Background Color</label>
+                          <div className="flex gap-0 border rounded-md overflow-hidden">
+                            <button
+                              onClick={() => updateLabelSetting('backgroundColor', 'black')}
+                              className={`flex-1 p-2 text-sm font-bold text-white bg-black flex items-center justify-center gap-1
+                                ${labelSettings.backgroundColor === 'black' 
+                                  ? 'ring-2 ring-inset ring-blue-500' 
+                                  : 'hover:bg-opacity-90'
+                                }`}
+                            >
+                              {labelSettings.backgroundColor === 'black' && (
+                                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              Black
+                            </button>
+                            <div className="w-px bg-gray-200" />
+                            <button
+                              onClick={() => updateLabelSetting('backgroundColor', 'white')}
+                              className={`flex-1 p-2 text-sm font-bold text-black bg-white flex items-center justify-center gap-1
+                                ${labelSettings.backgroundColor === 'white' 
+                                  ? 'ring-2 ring-inset ring-blue-500' 
+                                  : 'hover:bg-gray-50'
+                                }`}
+                            >
+                              {labelSettings.backgroundColor === 'white' && (
+                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              White
+                            </button>
+                            <div className="w-px bg-gray-200" />
+                            <button
+                              onClick={() => updateLabelSetting('backgroundColor', 'transparent')}
+                              className={`flex-1 p-2 text-sm font-bold text-white bg-gray-700 flex items-center justify-center gap-1
+                                ${labelSettings.backgroundColor === 'transparent' 
+                                  ? 'ring-2 ring-inset ring-blue-500' 
+                                  : 'hover:bg-gray-600'
+                                }`}
+                            >
+                              {labelSettings.backgroundColor === 'transparent' && (
+                                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                              None
+                            </button>
+                          </div>
+                        </div>
+
+                        {labelSettings.backgroundColor !== 'transparent' && (
+                          <div>
+                            <label className="block text-xs text-gray-300 mb-1">Background Opacity</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="range"
+                                min="10"
+                                max="100"
+                                value={Math.round(labelSettings.backgroundOpacity * 100)}
+                                onChange={(e) => updateLabelSetting('backgroundOpacity', parseInt(e.target.value) / 100)}
+                                className="flex-1"
+                              />
+                              <span className="text-sm text-gray-300 w-12">{Math.round(labelSettings.backgroundOpacity * 100)}%</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
                           <label className="block text-xs text-gray-300 mb-1">Stroke Weight</label>
                           <div className="flex items-center gap-2">
                             <input
@@ -880,19 +1014,32 @@ export default function MemeGenerator({
               </div>
 
               <div className="w-full lg:w-1/2">
-                <h2 className="text-lg font-medium mb-2">Preview</h2>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-lg font-medium">Preview</h2>
+                  {!isGreenscreenMode && selectedTemplate && (
+                    <button
+                      onClick={toggleCrop}
+                      className={`text-sm px-3 py-1 rounded-full ${
+                        isCropped 
+                          ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                      title={isCropped ? "Expand video to full height" : "Crop video to compact size"}
+                    >
+                      {isCropped ? 'Uncrop' : 'Crop'}
+                    </button>
+                  )}
+                </div>
                 <div className="lg:sticky lg:top-4 relative z-10">
-                  <div className="relative aspect-[9/16] w-full bg-black rounded-lg">
+                  <div className={`relative ${isCropped ? 'aspect-auto bg-black' : 'aspect-[9/16] bg-black'} w-full rounded-lg overflow-hidden flex flex-col items-center justify-center`}>
                     {previewCanvas ? (
-                      <div className="absolute inset-0">
-                        <img 
-                          src={previewCanvas.toDataURL()} 
-                          alt="Meme preview"
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
+                      <img 
+                        src={previewCanvas.toDataURL()} 
+                        alt="Meme preview"
+                        className={`max-w-full ${isCropped ? 'h-auto' : 'h-full object-contain'}`}
+                      />
                     ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                      <div className="text-gray-400">
                         <p className="text-sm">Preview will appear here</p>
                       </div>
                     )}

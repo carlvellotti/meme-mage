@@ -35,7 +35,10 @@ export async function createMemeVideo(
     size: number;
     color: 'white' | 'black';
     strokeWeight: number;
-  }
+    backgroundColor?: 'black' | 'white' | 'transparent';
+    backgroundOpacity?: number;
+  },
+  isCropped?: boolean
 ): Promise<Blob> {
   // Create a container to hold and control all media elements
   const container = document.createElement('div');
@@ -57,16 +60,50 @@ export async function createMemeVideo(
 
     // Step 2: Set up canvas with proper dimensions
     const canvas = document.createElement('canvas');
-    canvas.width = 1080;
-    canvas.height = 1920;
+    
+    // Standard canvas dimensions
+    const standardWidth = 1080;
+    const standardHeight = 1920;
+    
+    // Calculate video dimensions and position
+    const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
+    const targetWidth = standardWidth;
+    const targetHeight = targetWidth / videoAspect;
+    const yOffset = (standardHeight - targetHeight) / 2;
+    
+    // If crop mode is enabled and we're not in greenscreen mode
+    if (isCropped && !isGreenscreen) {
+      // For height calculation, we need to estimate the text height first
+      const fontSize = textSettings?.size || 78;
+      const estimatedLineHeight = fontSize * 1.1;
+      
+      // Assuming worst case of 3 lines of text, calculate estimated text height
+      // This is just for initial canvas sizing, exact positioning will be done in render
+      const estimatedTextLines = 3;
+      const estimatedTextHeight = estimatedTextLines * estimatedLineHeight;
+      
+      // Calculate initial estimated canvas height:
+      // - 30px top padding (increased from 20px)
+      // - Estimated text height
+      // - 15px gap between text and video
+      // - Video height
+      // - 15px bottom padding
+      const textTop = 30; // Increased from 20px
+      const estimatedTextBottom = textTop + estimatedTextHeight;
+      const estimatedVideoTop = estimatedTextBottom + 15;
+      const newHeight = estimatedVideoTop + targetHeight + 15;
+      
+      // Set initial canvas dimensions for cropped mode - will be refined in renderFrame
+      canvas.width = standardWidth;
+      canvas.height = newHeight;
+    } else {
+      // Standard dimensions for non-cropped mode
+      canvas.width = standardWidth;
+      canvas.height = standardHeight;
+    }
+    
     const ctx = canvas.getContext('2d')!;
     container.appendChild(canvas);
-
-    // Step 3: Calculate video dimensions
-    const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
-    const targetWidth = canvas.width;
-    const targetHeight = targetWidth / videoAspect;
-    const yOffset = (canvas.height - targetHeight) / 2;
 
     // Step 4: Create a rendering function
     const renderFrame = () => {
@@ -76,6 +113,7 @@ export async function createMemeVideo(
 
       // Draw background if in greenscreen mode
       if (isGreenscreen && backgroundImageElement) {
+        // For greenscreen mode, we don't apply crop (as per requirements)
         ctx.drawImage(backgroundImageElement, 0, 0, canvas.width, canvas.height);
         
         // Process video frame with greenscreen removal
@@ -83,15 +121,171 @@ export async function createMemeVideo(
         ctx.drawImage(processedFrame, 0, yOffset, targetWidth, targetHeight);
       } else {
         // Regular video drawing
-        ctx.drawImage(videoElement, 0, yOffset, targetWidth, targetHeight);
+        if (isCropped) {
+          // First measure the text height
+          const fontSize = textSettings?.size || 78;
+          const font = textSettings?.font || 'Impact';
+          const lineHeight = fontSize * 1.1; // Line height multiplier
+          
+          // Set up text for measurement
+          ctx.font = `${fontSize}px ${font}`;
+          
+          // Handle text wrapping to determine actual text height
+          const maxWidth = canvas.width - 80;
+          const lines = wrapText(ctx, caption, maxWidth);
+          const totalTextHeight = lines.length * lineHeight;
+          
+          // Calculate text position and spacing
+          const textTop = 30; // 30px from top of cropped canvas (increased from 20px)
+          const textBottom = textTop + totalTextHeight;
+          
+          // Position video 15px below the text
+          const videoTop = textBottom + 15;
+          
+          // Calculate total height with 15px bottom padding
+          const totalHeight = videoTop + targetHeight + 15;
+          
+          // If the canvas height doesn't match our calculation, resize it
+          // This ensures consistency between preview and downloaded video
+          if (Math.abs(canvas.height - totalHeight) > 2) { // Allow small rounding differences
+            canvas.height = totalHeight;
+            // Clear canvas since size changed
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          
+          // Draw the video at the position below the text
+          ctx.drawImage(videoElement, 0, videoTop, targetWidth, targetHeight);
+        } else {
+          // Standard video drawing
+          ctx.drawImage(videoElement, 0, yOffset, targetWidth, targetHeight);
+        }
       }
 
       // Draw caption
-      drawCaption(ctx, caption, canvas.width, canvas.height, textSettings);
+      if (caption) {
+        if (isCropped) {
+          // In cropped mode, caption is positioned at fixed 20px from the top
+          const fontSize = textSettings?.size || 78;
+          const font = textSettings?.font || 'Impact';
+          const strokeWeight = textSettings?.strokeWeight || 0.08;
+          const color = textSettings?.color || 'white';
+          const alignment = textSettings?.alignment || 'center';
+          const lineHeight = fontSize * 1.1; // Line height for consistency
+          
+          // Set caption properties
+          ctx.font = `${fontSize}px ${font}`;
+          ctx.textBaseline = 'top';
+          
+          // Set text alignment
+          if (alignment === 'left') ctx.textAlign = 'left';
+          else if (alignment === 'right') ctx.textAlign = 'right';
+          else ctx.textAlign = 'center';
+          
+          // Calculate position
+          const x = alignment === 'left' ? 40 : (alignment === 'right' ? canvas.width - 40 : canvas.width / 2);
+          const y = 30; // 30px from top in cropped mode (increased from 20px)
+          
+          // Handle text wrapping
+          const maxWidth = canvas.width - 80;
+          const lines = wrapText(ctx, caption, maxWidth);
+          
+          // Draw each line
+          lines.forEach((line, index) => {
+            const lineY = y + (index * lineHeight);
+            
+            // Draw text stroke
+            ctx.lineWidth = fontSize * strokeWeight;
+            ctx.strokeStyle = color === 'white' ? 'black' : 'white';
+            ctx.strokeText(line, x, lineY);
+            
+            // Draw text fill
+            ctx.fillStyle = color;
+            ctx.fillText(line, x, lineY);
+          });
+        } else {
+          // Standard caption drawing for non-cropped mode
+          drawCaption(ctx, caption, canvas.width, canvas.height, textSettings);
+        }
+      }
       
-      // Draw labels
-      if (labels?.length) {
+      // Draw labels only in non-cropped mode
+      if (labels?.length && !isCropped) {
         drawLabels(ctx, labels, canvas.width, canvas.height, labelSettings);
+      }
+      // Handle labels in cropped mode
+      else if (labels?.length && isCropped) {
+        // Filter and translate labels for cropped mode
+        labels.forEach(label => {
+          if (!label.text.trim()) return;
+          
+          // Calculate original position in full canvas 
+          const originalX = (label.horizontalPosition / 100) * standardWidth;
+          const originalY = (label.verticalPosition / 100) * standardHeight;
+          
+          // Only display labels that were originally within the video area
+          if (originalY >= yOffset && originalY <= (yOffset + targetHeight)) {
+            // Calculate position relative to video
+            const relativeY = originalY - yOffset;
+            
+            // Since we can't access the variables directly, recalculate them
+            const cropTextTop = 30; // Same as defined earlier
+            
+            // Estimate text height based on caption
+            const captionFontSize = textSettings?.size || 78;
+            const captionLineHeight = captionFontSize * 1.1;
+            const captionLines = wrapText(ctx, caption, canvas.width - 80);
+            const captionTextHeight = captionLines.length * captionLineHeight;
+            
+            // Video starts at: top padding + caption height + gap
+            const videoY = cropTextTop + captionTextHeight + 15;
+            
+            // Translate to new position
+            const newY = videoY + relativeY;
+            
+            // Draw label at translated position
+            // Use custom font and size for label
+            const fontSize = label.size;
+            ctx.font = `${fontSize}px ${label.font}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+  
+            // Calculate approximate label width
+            const metrics = ctx.measureText(label.text);
+            const textWidth = metrics.width;
+            
+            // Get background settings from labelSettings, with defaults
+            const bgColor = labelSettings?.backgroundColor || 'black';
+            const bgOpacity = labelSettings?.backgroundOpacity !== undefined ? labelSettings.backgroundOpacity : 0.5;
+            
+            // Draw a background rectangle if not transparent
+            if (bgColor !== 'transparent') {
+              const padding = 10;
+              // Set background color and opacity
+              if (bgColor === 'black') {
+                ctx.fillStyle = `rgba(0, 0, 0, ${bgOpacity})`;
+              } else if (bgColor === 'white') {
+                ctx.fillStyle = `rgba(255, 255, 255, ${bgOpacity})`;
+              }
+              
+              ctx.fillRect(
+                originalX - textWidth / 2 - padding,
+                newY - fontSize / 2 - padding / 2,
+                textWidth + padding * 2,
+                fontSize + padding
+              );
+            }
+  
+            // Set stroke and draw text
+            ctx.lineWidth = fontSize * (labelSettings?.strokeWeight || 0.08);
+            ctx.strokeStyle = labelSettings?.color === 'black' ? 'white' : 'black';
+            ctx.strokeText(label.text, originalX, newY);
+            
+            // Fill text
+            ctx.fillStyle = labelSettings?.color === 'black' ? 'black' : 'white';
+            ctx.fillText(label.text, originalX, newY);
+          }
+        });
       }
     };
 
@@ -322,7 +516,7 @@ function drawCaption(
   
   const maxWidth = canvasWidth * 0.9;
   const lines = wrapText(ctx, caption, maxWidth);
-  const lineHeight = fontSize * 1.2;
+  const lineHeight = fontSize * 1.1;
 
   // Calculate vertical position
   const textY = canvasHeight * (textSettings?.verticalPosition || 25) / 100;
@@ -340,13 +534,13 @@ function drawCaption(
     ? fontSize * textSettings.strokeWeight 
     : fontSize * 0.08;
 
-  // Adjust vertical position to account for multiple lines
-  // This ensures the BOTTOM of the LAST line is at the specified vertical position
-  const totalTextHeight = lineHeight * (lines.length - 1);
-  const adjustedTextY = textY - totalTextHeight;
+  // Calculate the total height of all text lines
+  const totalTextHeight = (lines.length - 1) * lineHeight;
 
+  // Draw each line of text, positioning the BOTTOM of the LAST line at the specified vertical position
   lines.forEach((line, index) => {
-    const y = adjustedTextY + (index * lineHeight);
+    // Adjust position so the BOTTOM of the LAST line is at the specified vertical position
+    const y = textY - (lines.length - 1 - index) * lineHeight;
     
     // Set stroke color to be opposite of text color for better visibility
     ctx.strokeStyle = textColor === 'white' ? '#000000' : '#FFFFFF';
@@ -369,25 +563,54 @@ function drawLabels(
     size: number;
     color: 'white' | 'black';
     strokeWeight: number;
+    backgroundColor?: 'black' | 'white' | 'transparent';
+    backgroundOpacity?: number;
   }
 ) {
+  if (!labels || !labels.length) return;
+
   labels.forEach(label => {
     if (!label.text.trim()) return;
-    
+
     const x = canvasWidth * (label.horizontalPosition / 100);
     const y = canvasHeight * (label.verticalPosition / 100);
     
-    // Use label's size and font
     ctx.font = `bold ${label.size}px ${label.font}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    
+
     // Get text color and stroke weight from global settings
     const textColor = labelSettings?.color || 'white';
     const strokeWeight = labelSettings?.strokeWeight !== undefined 
       ? label.size * labelSettings.strokeWeight 
       : label.size * 0.08;
+      
+    // Get background settings from labelSettings, with defaults
+    const bgColor = labelSettings?.backgroundColor || 'black';
+    const bgOpacity = labelSettings?.backgroundOpacity !== undefined ? labelSettings.backgroundOpacity : 0.5;
     
+    // Calculate approximate label width
+    const metrics = ctx.measureText(label.text);
+    const textWidth = metrics.width;
+    
+    // Draw a background rectangle if not transparent
+    if (bgColor !== 'transparent') {
+      const padding = 10;
+      // Set background color and opacity
+      if (bgColor === 'black') {
+        ctx.fillStyle = `rgba(0, 0, 0, ${bgOpacity})`;
+      } else if (bgColor === 'white') {
+        ctx.fillStyle = `rgba(255, 255, 255, ${bgOpacity})`;
+      }
+      
+      ctx.fillRect(
+        x - textWidth / 2 - padding,
+        y - label.size / 2 - padding / 2,
+        textWidth + padding * 2,
+        label.size + padding
+      );
+    }
+
     // Set stroke color to be opposite of text color for better visibility
     ctx.strokeStyle = textColor === 'white' ? '#000000' : '#FFFFFF';
     ctx.lineWidth = strokeWeight;
