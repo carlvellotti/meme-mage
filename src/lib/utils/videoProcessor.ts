@@ -82,13 +82,13 @@ export async function createMemeVideo(
       const estimatedTextLines = 3;
       const estimatedTextHeight = estimatedTextLines * estimatedLineHeight;
       
-      // Calculate initial estimated canvas height:
-      // - 30px top padding (increased from 20px)
+      // Calculate canvas height to include:
+      // - 30px top padding
       // - Estimated text height
       // - 15px gap between text and video
       // - Video height
       // - 15px bottom padding
-      const textTop = 30; // Increased from 20px
+      const textTop = 30;
       const estimatedTextBottom = textTop + estimatedTextHeight;
       const estimatedVideoTop = estimatedTextBottom + 15;
       const newHeight = estimatedVideoTop + targetHeight + 15;
@@ -165,7 +165,7 @@ export async function createMemeVideo(
       // Draw caption
       if (caption) {
         if (isCropped) {
-          // In cropped mode, caption is positioned at fixed 20px from the top
+          // In cropped mode, caption is positioned at fixed 30px from the top
           const fontSize = textSettings?.size || 78;
           const font = textSettings?.font || 'Impact';
           const strokeWeight = textSettings?.strokeWeight || 0.08;
@@ -173,7 +173,7 @@ export async function createMemeVideo(
           const alignment = textSettings?.alignment || 'center';
           const lineHeight = fontSize * 1.1; // Line height for consistency
           
-          // Set caption properties
+          // Set caption properties - match preview generator (no "bold")
           ctx.font = `${fontSize}px ${font}`;
           ctx.textBaseline = 'top';
           
@@ -182,9 +182,9 @@ export async function createMemeVideo(
           else if (alignment === 'right') ctx.textAlign = 'right';
           else ctx.textAlign = 'center';
           
-          // Calculate position
+          // Calculate position (same calculation as preview generator)
           const x = alignment === 'left' ? 40 : (alignment === 'right' ? canvas.width - 40 : canvas.width / 2);
-          const y = 30; // 30px from top in cropped mode (increased from 20px)
+          const y = 30; // 30px from top in cropped mode
           
           // Handle text wrapping
           const maxWidth = canvas.width - 80;
@@ -510,22 +510,22 @@ function drawCaption(
   textSettings?: TextSettings
 ) {
   const fontSize = textSettings ? textSettings.size : Math.floor(canvasWidth * 0.078);
-  ctx.font = `bold ${fontSize}px ${textSettings?.font || 'Impact'}`;
+  ctx.font = `${fontSize}px ${textSettings?.font || 'Impact'}`;
   ctx.textAlign = textSettings?.alignment || 'center';
   ctx.textBaseline = 'bottom';
   
-  const maxWidth = canvasWidth * 0.9;
+  const maxWidth = canvasWidth - 80;
   const lines = wrapText(ctx, caption, maxWidth);
   const lineHeight = fontSize * 1.1;
 
   // Calculate vertical position
   const textY = canvasHeight * (textSettings?.verticalPosition || 25) / 100;
 
-  // Calculate x position based on alignment
+  // Use same x position calculation as preview generator
   const x = textSettings?.alignment === 'left' 
-    ? canvasWidth * 0.05 
+    ? 40
     : textSettings?.alignment === 'right' 
-      ? canvasWidth * 0.95 
+      ? canvasWidth - 40 
       : canvasWidth / 2;
 
   // Get text color and stroke weight from settings or use defaults
@@ -575,7 +575,8 @@ function drawLabels(
     const x = canvasWidth * (label.horizontalPosition / 100);
     const y = canvasHeight * (label.verticalPosition / 100);
     
-    ctx.font = `bold ${label.size}px ${label.font}`;
+    // Use label's font and size - remove "bold" to match preview generator
+    ctx.font = `${label.size}px ${label.font}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 

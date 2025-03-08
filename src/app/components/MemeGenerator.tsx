@@ -87,7 +87,7 @@ export default function MemeGenerator({
   const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
   const [textSettings, setTextSettings] = useState<TextSettings>({
     size: 78,
-    font: 'Impact',
+    font: 'Arial',
     verticalPosition: isGreenscreenMode ? 25 : 25,
     alignment: 'center',
     color: 'white',
@@ -107,7 +107,7 @@ export default function MemeGenerator({
     backgroundColor: 'black' | 'white' | 'transparent';
     backgroundOpacity: number;
   }>({
-    font: 'Impact',
+    font: 'Arial',
     size: 78,
     color: 'white',
     strokeWeight: 0.08,
@@ -570,6 +570,7 @@ export default function MemeGenerator({
                         onChange={(e) => updateTextSetting('font', e.target.value)}
                         className="w-full p-2 text-sm border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-2 focus:ring-blue-500"
                       >
+                        <option value="Arial">Arial</option>
                         <option value="Impact">Impact (Classic Meme)</option>
                         <option value="Arial Black">Arial Black</option>
                         <option value="Comic Sans MS">Comic Sans MS</option>
@@ -786,6 +787,7 @@ export default function MemeGenerator({
                             onChange={(e) => updateLabelSetting('font', e.target.value)}
                             className="w-full p-2 text-sm border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-2 focus:ring-blue-500"
                           >
+                            <option value="Arial">Arial</option>
                             <option value="Impact">Impact (Classic Meme)</option>
                             <option value="Arial Black">Arial Black</option>
                             <option value="Comic Sans MS">Comic Sans MS</option>
