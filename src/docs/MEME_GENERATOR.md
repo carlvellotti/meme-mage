@@ -126,7 +126,7 @@ The meme generator uses vector embeddings and similarity search to find the most
 ```typescript
 interface TextSettings {
   size: number;        // Font size (40-120)
-  font: string;        // Font family
+  font: string;        // Font family (default: 'Arial')
   verticalPosition: number; // % from top (2-95)
   alignment: 'left' | 'center' | 'right';
   color: 'white' | 'black';  // Text color
@@ -142,14 +142,14 @@ interface Label {
   horizontalPosition: number; // % from left (0-100)
   verticalPosition: number;   // % from top (0-100)
   size: number;              // Font size (40-120)
-  font: string;              // Font family
+  font: string;              // Font family (inherited from labelSettings)
 }
 ```
 
 #### Global Label Settings
 ```typescript
 interface LabelSettings {
-  font: string;              // Font family for all labels
+  font: string;              // Font family for all labels (default: 'Arial')
   size: number;              // Font size for all labels (40-120)
   color: 'white' | 'black';  // Text color for all labels
   strokeWeight: number;      // Stroke weight as multiplier of font size
@@ -172,6 +172,19 @@ interface LabelSettings {
   - Renders a slightly padded rectangle behind each label
   - Applies consistently in both regular and cropped mode
   - Maintains proper z-indexing with text
+
+#### Font Options
+- **Default Font**: Arial (modern, clean sans-serif)
+- **Font Order in UI**:
+  1. Arial (default)
+  2. Impact (classic meme font)
+  3. Arial Black (bold sans-serif)
+  4. Comic Sans MS
+  5. Additional web-safe fonts
+- **Font Consistency**:
+  - Same font options available for both captions and labels
+  - Individual labels inherit from global label settings
+  - Font rendering consistent between preview and downloaded video
 
 ### 4. Background Image System
 - Unsplash API integration with proper attribution
@@ -382,7 +395,7 @@ const [selectedBackground, setSelectedBackground] = useState<BackgroundImage | n
 // Text Configuration
 const [textSettings, setTextSettings] = useState<TextSettings>({
   size: 78,
-  font: 'Impact',
+  font: 'Arial',
   verticalPosition: 25,
   alignment: 'center',
   color: 'white',
@@ -391,7 +404,7 @@ const [textSettings, setTextSettings] = useState<TextSettings>({
 
 // Label Configuration
 const [labelSettings, setLabelSettings] = useState({
-  font: 'Impact',
+  font: 'Arial',
   size: 78,
   color: 'white',
   strokeWeight: 0.08,

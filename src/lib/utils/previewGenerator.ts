@@ -78,14 +78,14 @@ export async function createMemePreview(
         const totalTextHeight = lines.length * lineHeight;
         
         // We want to create a cropped canvas that:
-        // 1. Has 20px padding above the text
+        // 1. Has 30px padding above the text
         // 2. Has the full text height (now properly calculated)
         // 3. Has 15px padding between text and video
         // 4. Has the full video height
         // 5. Has 15px padding below the video
         
         // Calculate top crop line (we crop everything above this point)
-        const topCrop = textPositionY - 20;
+        const topCrop = textPositionY - 30;
         
         // Calculate bottom of video
         const videoBottom = yOffset + targetHeight;
@@ -98,7 +98,7 @@ export async function createMemePreview(
         const videoTop = textBottom + 15;
         
         // Calculate the new canvas height to include:
-        // - 30px top padding (increased from 20px)
+        // - 30px top padding
         // - Text height
         // - 15px gap between text and video
         // - Video height
