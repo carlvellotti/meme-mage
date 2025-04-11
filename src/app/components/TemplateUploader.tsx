@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast'
 export function TemplateUploader() {
   const [templateName, setTemplateName] = useState('')
   const [templateExplanation, setTemplateExplanation] = useState('')
+  const [uploaderName, setUploaderName] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,7 +74,8 @@ export function TemplateUploader() {
           instructions: templateExplanation,
           video_url: publicUrl,
           embedding,
-          is_greenscreen: isGreenscreen
+          is_greenscreen: isGreenscreen,
+          uploader_name: uploaderName
         })
         .select()
         .single();
@@ -325,6 +327,20 @@ export function TemplateUploader() {
           className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500 min-h-[120px]"
           placeholder="Explain how this template should be used, what captions work well, etc."
           required
+        />
+      </div>
+
+      <div>
+        <label htmlFor="uploader-name" className="block text-sm font-medium text-gray-300 mb-2">
+          Your Name (Optional)
+        </label>
+        <input
+          type="text"
+          id="uploader-name"
+          value={uploaderName}
+          onChange={(e) => setUploaderName(e.target.value)}
+          className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
+          placeholder="Enter your name (optional)"
         />
       </div>
 
