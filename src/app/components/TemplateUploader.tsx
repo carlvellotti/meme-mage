@@ -332,7 +332,7 @@ export function TemplateUploader() {
 
       <div>
         <label htmlFor="uploader-name" className="block text-sm font-medium text-gray-300 mb-2">
-          Your Name (Optional)
+          Your Name
         </label>
         <input
           type="text"
@@ -340,7 +340,8 @@ export function TemplateUploader() {
           value={uploaderName}
           onChange={(e) => setUploaderName(e.target.value)}
           className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
-          placeholder="Enter your name (optional)"
+          placeholder="Enter your name"
+          required
         />
       </div>
 
