@@ -1,13 +1,16 @@
-# Reels Scraper Integration: Chunk 2 - Frontend Components
+# Reels Scraper Integration: Chunk 3 - Frontend Components
 
 ## 1. Goals
 
 *   Develop a user interface component (`ReelScraperForm.tsx`) for inputting Instagram Reel URLs.
-*   Create a table component (`UnprocessedTemplatesTable.tsx`) to display unprocessed templates.
-*   Implement communication with the API endpoint created in Chunk 1.
-*   Enable selection and propagation of template data from the table to the existing `TemplateUploader` component.
+*   Create a table component (`UnprocessedTemplatesTable.tsx`) to display unprocessed templates retrieved from the database.
+*   Implement communication between `ReelScraperForm` and the `/api/scrape-reels` endpoint (created in Chunk 1).
+*   Enable selection of a completed template from `UnprocessedTemplatesTable` and propagate its data (`cropped_video_url`, `caption_text`, `id`) to the existing `TemplateUploader` component.
+*   Modify `TemplateUploader` to call the `/api/unprocessed-templates/[id]` DELETE endpoint (created in Chunk 2) after successfully saving a template originating from the unprocessed list.
 
 ## 2. Technical Outline
+
+**(Prerequisite Met: The `/api/unprocessed-templates/[id]` DELETE endpoint required for step 2.3 was created and tested during Chunk 2).**
 
 ### 2.1. `ReelScraperForm.tsx` Component
 

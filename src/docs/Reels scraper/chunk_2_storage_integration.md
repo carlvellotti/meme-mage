@@ -63,6 +63,11 @@
     *   Successfully executed multiple times with different URLs (`DIbYpKHR3xj`, `DIW7ZoNT0fn`, `DITV5E5xM8G`).
     *   Confirmed creation/update of records in `unprocessed_templates` table with `status='completed'`, correct URLs, and captions.
     *   Validated that running the main script leaves the final records in the database (unlike the test script's default cleanup).
+*   **DELETE API Route (`/api/unprocessed-templates/[id]/route.ts`):**
+    *   Created the `DELETE` handler using the server-side Supabase client.
+    *   Tested using `curl` with an existing ID, received `204 No Content`.
+    *   Tested again with the same ID, received `404 Not Found`.
+    *   Confirmed the API route successfully deletes records from `unprocessed_templates`.
 
 ## 4. Chunk 2 Implementation Notes & Key Decisions
 
@@ -73,6 +78,7 @@
 *   **Storage Upload Duplicates:** Initial integration testing failed due to duplicate files already existing in storage from previous runs. The test script cleanup only removed DB records. Running the main `process_reels.py` script (which doesn't clean storage) highlighted this. Supabase Storage defaults to rejecting uploads if the exact path/filename already exists.
 *   **`process_url` Argument Fix:** Corrected `process_reels.py` by instantiating `StorageUploader` *inside* the `process_url` function instead of requiring it as an argument, resolving a `TypeError` during testing.
 *   **Successful End-to-End Validation:** Direct runs of `process_reels.py` confirmed the entire pipeline works correctly for new URLs, leaving the final results in the database and storage as expected.
+*   **DELETE API Route Creation:** Although technically part of the frontend workflow logic, the `/api/unprocessed-templates/[id]` DELETE route was created and tested during this phase to ensure all necessary backend functionality was in place.
 
 ## 5. Remaining Considerations / Next Steps Prep
 

@@ -34,7 +34,7 @@ The integration has been divided into the following chunks:
 
 **Key Deliverables**: Supabase Storage buckets (`unprocessed-videos`, `unprocessed-thumbnails`), Python `StorageUploader` class, `db_manager.py` refactored for `supabase-py`, Full processing pipeline in `process_reels.py` with file uploads and DB updates, Test scripts (`test_env.py`, `test_db.py`, `test_storage.py`, `test_integration.py`), Successful direct execution test.
 
-**Key Decisions/Notes**: Added `httpx`, `python-magic`, `supabase-py`, `python-dotenv`. Required `libmagic` system dependency installation. Resolved `.env` loading for direct script execution using `python-dotenv`. Handled ambiguity between `SUPABASE_SERVICE_KEY` and `SUPABASE_SERVICE_ROLE_KEY`. Refactored DB access from `psycopg2` to `supabase-py` due to direct connection restrictions. Successfully tested end-to-end pipeline via direct script execution, leaving final records in DB/Storage for validation.
+**Key Decisions/Notes**: Added `httpx`, `python-magic`, `supabase-py`, `python-dotenv`. Required `libmagic` system dependency installation. Resolved `.env` loading for direct script execution using `python-dotenv`. Handled ambiguity between `SUPABASE_SERVICE_KEY` and `SUPABASE_SERVICE_ROLE_KEY`. Refactored DB access from `psycopg2` to `supabase-py` due to direct connection restrictions. Successfully tested end-to-end pipeline via direct script execution. **Created and tested the `DELETE /api/unprocessed-templates/[id]` API route needed for Chunk 3.**
 
 ### [Chunk 3: Frontend Components](./chunk_3_frontend_components.md)
 **(Planned Next)**
