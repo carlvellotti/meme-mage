@@ -1,7 +1,12 @@
 yt-dlp>=2023.0.0
-opencv-contrib-python>=4.7.0.0
-pytesseract>=0.3.10
+opencv-python>=4.7.0.0
+# pytesseract>=0.3.10
 Pillow>=9.5.0
-psycopg2-binary>=2.9.10
-httpx==0.24.1
+# psycopg2-binary>=2.9.10
+
+# Dependencies added in Chunk 2
+httpx==0.27.2
 python-magic==0.4.27
+supabase
+python-dotenv>=0.20.0
+google-cloud-vision>=3.0.0

@@ -3,7 +3,7 @@ import os
 import sys
 import argparse
 import logging
-from db_utils import insert_initial_reel
+from db_manager import insert_pending_reel, update_template_urls, update_template_error, update_template_status
 import traceback
 import uuid
 import re
@@ -22,7 +22,6 @@ except ImportError as e:
 
 # Import our new modules
 from storage_uploader import StorageUploader
-import db_manager # Use the updated db_manager
 
 # Configure logging
 logging.basicConfig(
@@ -89,15 +88,18 @@ def process_url(url):
     try:
         # Extract Instagram ID for unique naming
         instagram_id = extract_instagram_id(url)
+        if not instagram_id:
+            logger.error(f"Could not extract Instagram ID from URL: {url}")
+            return False
 
         # Insert the initial record
-        template_id = db_manager.insert_pending_reel(url)
+        template_id = insert_pending_reel(url)
         if not template_id:
-            print(f"Failed to create database record for {url}")
+            logger.error(f"Failed to insert initial record for URL: {url}")
             return False
 
         # Update status to processing
-        db_manager.update_template_status(template_id, 'processing')
+        update_template_status(template_id, 'processing')
 
         print(f"Processing URL: {url} with ID: {instagram_id}")
 
@@ -105,14 +107,14 @@ def process_url(url):
         # (The existing download logic - assume returns path or None)
         video_path = download_video(url) 
         if not video_path:
-            db_manager.update_template_error(template_id, "Failed to download video")
+            update_template_error(template_id, "Failed to download video")
             return False
 
         # 2. Extract a frame
         # (The existing frame extraction logic - assume returns path or None)
         frame_path = extract_frame(video_path)
         if not frame_path:
-            db_manager.update_template_error(template_id, "Failed to extract frame")
+            update_template_error(template_id, "Failed to extract frame")
             cleanup_files(video_path) # Clean up downloaded video if frame extraction fails
             return False
 
@@ -120,7 +122,7 @@ def process_url(url):
         # (The existing cropping logic - assume returns path or None)
         cropped_video_path = crop_video(video_path, frame_path)
         if not cropped_video_path:
-            db_manager.update_template_error(template_id, "Failed to crop video")
+            update_template_error(template_id, "Failed to crop video")
             cleanup_files(video_path, frame_path) # Clean up original video and frame
             return False
 
@@ -135,7 +137,7 @@ def process_url(url):
             print("StorageUploader initialized successfully.")
         except ValueError as e:
             print(f"Failed to initialize StorageUploader: {e}")
-            db_manager.update_template_error(template_id, f"Storage Uploader init failed: {e}")
+            update_template_error(template_id, f"Storage Uploader init failed: {e}")
             cleanup_files(video_path, frame_path, cropped_video_path)
             return False
 
@@ -143,7 +145,7 @@ def process_url(url):
         print(f"Attempting to upload thumbnail from: {frame_path}")
         thumbnail_success, thumbnail_url = uploader.upload_thumbnail(frame_path, instagram_id)
         if not thumbnail_success:
-            db_manager.update_template_error(template_id, f"Failed to upload thumbnail: {thumbnail_url}")
+            update_template_error(template_id, f"Failed to upload thumbnail: {thumbnail_url}")
             cleanup_files(video_path, frame_path, cropped_video_path)
             return False
         print(f"Thumbnail uploaded: {thumbnail_url}")
@@ -152,7 +154,7 @@ def process_url(url):
         print(f"Attempting to upload video from: {cropped_video_path}")
         video_success, video_url = uploader.upload_video(cropped_video_path, instagram_id)
         if not video_success:
-            db_manager.update_template_error(template_id, f"Failed to upload video: {video_url}")
+            update_template_error(template_id, f"Failed to upload video: {video_url}")
             # Attempt to clean up thumbnail if video upload fails?
             # Consider adding cleanup logic for already uploaded thumbnail
             cleanup_files(video_path, frame_path, cropped_video_path)
@@ -161,7 +163,7 @@ def process_url(url):
 
         # 6. Update the database record with the URLs and caption
         print("Attempting to update database record...")
-        update_success = db_manager.update_template_urls(
+        update_success = update_template_urls(
             template_id,
             cropped_video_url=video_url,
             thumbnail_url=thumbnail_url,
@@ -190,7 +192,7 @@ def process_url(url):
 
         # Update the status if we have a template ID
         if template_id:
-            db_manager.update_template_error(template_id, f"Processing error: {str(e)}")
+            update_template_error(template_id, f"Processing error: {str(e)}")
 
         # Ensure cleanup happens even on unexpected errors
         # Need to define paths before cleanup is called
