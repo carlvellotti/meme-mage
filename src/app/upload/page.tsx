@@ -39,12 +39,12 @@ export default function UploadPage() {
           }}
         />
         
-        <ReelScraperForm onProcessingComplete={handleRefreshNeeded} />
-        
         <UnprocessedTemplatesTable 
           onTemplateSelect={handleTemplateSelect} 
           refreshTrigger={refreshCounter} 
         />
+
+        <ReelScraperForm onProcessingComplete={handleRefreshNeeded} /> 
       </div>
     </div>
   );

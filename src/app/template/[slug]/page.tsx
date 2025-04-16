@@ -49,6 +49,15 @@ export default function TemplatePage({ params }: { params: { slug: string } }) {
     fetchTemplate();
   }, [params.slug]);
 
+  // Handler to update the template state when instructions are saved
+  const handleInstructionsSaved = (updatedData: Partial<MemeTemplate>) => {
+    setTemplate(prevTemplate => {
+      if (!prevTemplate) return null; // Should not happen if editing
+      console.log('Updating parent template state with saved instructions...');
+      return { ...prevTemplate, ...updatedData };
+    });
+  };
+
   const handleBack = () => {
     router.push('/template-library');
   };
@@ -147,6 +156,7 @@ export default function TemplatePage({ params }: { params: { slug: string } }) {
             onBack={handleBack}
             onSelectTemplate={handleCreateFromTemplate}
             isGreenscreenMode={isGreenscreenMode}
+            onInstructionsSaved={handleInstructionsSaved}
           />
         )}
       </div>

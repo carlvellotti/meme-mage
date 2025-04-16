@@ -50,6 +50,9 @@ export interface MemeTemplate {
   created_at?: string;
   examples?: string[];
   tags?: string[];
+  is_greenscreen?: boolean | null;
+  original_source_url?: string | null;
+  uploader_name?: string | null;
 }
 
 export interface MemeGeneration {

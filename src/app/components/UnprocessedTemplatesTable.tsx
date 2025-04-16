@@ -179,7 +179,6 @@ export function UnprocessedTemplatesTable({
         ) : !loading && templates.length === 0 && !error ? (
           <div className="py-8 text-center text-gray-400">
             <p>No processed templates ready.</p>
-            <p className="text-sm mt-2">Use the form above to process Instagram Reels.</p>
           </div>
         ) : templates.length > 0 ? (
           <table className="w-full min-w-[600px] border-collapse text-sm">

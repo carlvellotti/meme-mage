@@ -68,7 +68,7 @@ export function ReelScraperForm({ onProcessingComplete }: ReelScraperFormProps) 
 
   return (
     <div className="space-y-4 bg-gray-800 p-6 rounded-lg border border-gray-700 mt-8">
-      <h2 className="text-xl font-bold text-white">Process Instagram Reels</h2>
+      <h2 className="text-xl font-bold text-white">Process Instagram Reels (Works for Carl only)</h2>
       
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
