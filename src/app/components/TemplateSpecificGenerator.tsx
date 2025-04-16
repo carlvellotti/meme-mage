@@ -11,6 +11,7 @@ interface TemplateSpecificGeneratorProps {
   onBack: () => void;
   onSelectTemplate: (template: MemeTemplate, caption: string, allOptions: SelectedMeme) => void;
   isGreenscreenMode: boolean;
+  onInstructionsSaved?: (updatedTemplate: Partial<MemeTemplate>) => void;
 }
 
 interface SelectedMeme {
@@ -26,7 +27,8 @@ export default function TemplateSpecificGenerator({
   template, 
   onBack, 
   onSelectTemplate,
-  isGreenscreenMode
+  isGreenscreenMode,
+  onInstructionsSaved
 }: TemplateSpecificGeneratorProps) {
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -228,6 +230,11 @@ export default function TemplateSpecificGenerator({
       const data = await response.json();
       console.log('Update successful:', data);
       
+      // Call the callback with the updated data from the API response
+      if (onInstructionsSaved && data.data) {
+        onInstructionsSaved(data.data);
+      }
+
       toast.success('Template instructions updated');
       setIsEditingInstructions(false);
     } catch (error) {
@@ -307,14 +314,19 @@ export default function TemplateSpecificGenerator({
         </div>
         
         {isEditingInstructions ? (
-          <textarea
-            ref={textareaRef}
-            value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
-            className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
-            style={{ minHeight: '100px' }}
-            placeholder="Add instructions for how this template should be used..."
-          />
+          <>
+            <textarea
+              ref={textareaRef}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
+              style={{ minHeight: '100px' }}
+              placeholder="Add instructions for how this template should be used..."
+            />
+            <p className="text-xs text-gray-400 mt-2">
+              Uploader: {template.uploader_name || 'N/A'}
+            </p>
+          </>
         ) : (
           <div className="relative">
             <p className="text-gray-300 p-2 border border-gray-700 rounded-md bg-gray-700 overflow-hidden text-sm" 

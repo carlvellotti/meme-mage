@@ -445,6 +445,29 @@ export function TemplateUploader({
         />
       </div>
 
+      {pastedImages.length > 0 && (
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          {pastedImages.map((image, index) => (
+            <div key={index} className="relative group">
+              <img 
+                src={image} 
+                alt={`Example ${index + 1}`} 
+                className="w-full h-40 object-cover rounded-lg"
+              />
+              <button
+                type="button"
+                onClick={() => setPastedImages(prev => prev.filter((_, i) => i !== index))}
+                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div>
         <label htmlFor="uploader-name" className="block text-sm font-medium text-gray-300 mb-2">
           Your Name
@@ -480,29 +503,6 @@ export function TemplateUploader({
             ℹ️ Greenscreen templates should have a solid green background for best results. 
             The green background will be replaced with user-selected backgrounds when creating memes.
           </p>
-        </div>
-      )}
-
-      {pastedImages.length > 0 && (
-        <div className="grid grid-cols-2 gap-4">
-          {pastedImages.map((image, index) => (
-            <div key={index} className="relative group">
-              <img 
-                src={image} 
-                alt={`Example ${index + 1}`} 
-                className="w-full h-40 object-cover rounded-lg"
-              />
-              <button
-                type="button"
-                onClick={() => setPastedImages(prev => prev.filter((_, i) => i !== index))}
-                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
-          ))}
         </div>
       )}
 
