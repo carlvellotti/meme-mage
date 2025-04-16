@@ -81,7 +81,7 @@ class StorageUploader:
             'Content-Type': content_type,
             # Include cache-control for videos/images
             'Cache-Control': 'max-age=3600',
-            # 'x-upsert': 'true' # Consider adding if overwriting is desired/needed
+            'x-upsert': 'true' # Enable overwriting/upserting files
         }
         print(f"Using headers: {headers}")
 

@@ -8,8 +8,8 @@ from pathlib import Path
 
 def detect_content_region(frame_path):
     """
-    Detect the main content region in a frame using contour detection.
-    Handles both dark and light backgrounds automatically.
+    Detect the main content region in a frame using cv2.inRange to exclude
+    near-black and near-white bars.
     
     Args:
         frame_path (str): Path to the frame image
@@ -26,141 +26,89 @@ def detect_content_region(frame_path):
     # Get frame dimensions
     frame_height, frame_width = frame.shape[:2]
     
+    # Create debug directory for saving intermediate images - REMOVED FOR PRODUCTION
+    # debug_dir = os.path.join(os.path.dirname(frame_path), "debug")
+    # os.makedirs(debug_dir, exist_ok=True)
+    # debug_prefix = os.path.join(debug_dir, os.path.basename(frame_path).split('.')[0])
+    
+    # Save original frame for debugging - REMOVED FOR PRODUCTION
+    # cv2.imwrite(f"{debug_prefix}_frame_original.jpg", frame)
+
     # Convert to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
-    # Calculate average brightness to determine if it's a white or dark background
-    average_brightness = np.mean(gray)
+    # Define near-black and near-white ranges
+    lower_black = 0
+    upper_black = 10 # Pixels <= 10 are considered black bars
+    lower_white = 235 # Pixels >= 235 are considered white bars (Adjusted from 245)
+    upper_white = 255
     
-    # Create debug directory for saving intermediate images
-    debug_dir = os.path.join(os.path.dirname(frame_path), "debug")
-    os.makedirs(debug_dir, exist_ok=True)
-    debug_prefix = os.path.join(debug_dir, os.path.basename(frame_path).split('.')[0])
+    # Create masks for black and white bars
+    black_mask = cv2.inRange(gray, lower_black, upper_black)
+    white_mask = cv2.inRange(gray, lower_white, upper_white)
     
-    # Save original frame for debugging
-    cv2.imwrite(f"{debug_prefix}_frame_top.jpg", frame)
+    # Combine masks to get all bar pixels
+    bar_mask = cv2.bitwise_or(black_mask, white_mask)
+    # cv2.imwrite(f"{debug_prefix}_bar_mask.jpg", bar_mask) # REMOVED DEBUG SAVE
     
-    # Determine if we have a light or dark background
-    is_light_background = average_brightness > 180
-    print(f"Image brightness: {average_brightness:.1f}, {'light' if is_light_background else 'dark'} background detected")
+    # Invert the mask to get the content mask (everything NOT a bar)
+    content_mask = cv2.bitwise_not(bar_mask)
+    # cv2.imwrite(f"{debug_prefix}_content_mask_raw.jpg", content_mask) # REMOVED DEBUG SAVE
     
-    # Try multiple thresholding approaches
-    crops = []
+    # Apply morphological erosion to remove thin borders/noise from the content mask
+    kernel = np.ones((3,3), np.uint8)
+    content_mask_eroded = cv2.erode(content_mask, kernel, iterations=1)
+    # cv2.imwrite(f"{debug_prefix}_content_mask_eroded.jpg", content_mask_eroded) # REMOVED DEBUG SAVE
     
-    # Approach 1: Basic thresholding based on background type
-    if is_light_background:
-        # For light backgrounds, use inverse binary threshold to find dark text/content
-        _, thresh1 = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY_INV)
-    else:
-        # For dark backgrounds, use standard binary threshold
-        _, thresh1 = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
+    # Find contours in the eroded content mask
+    contours, _ = cv2.findContours(content_mask_eroded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
-    cv2.imwrite(f"{debug_prefix}_thresh1.jpg", thresh1)
+    best_crop = None
+    max_area = 0
     
-    # Find contours in the first threshold image
-    contours1, _ = cv2.findContours(thresh1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    if contours1:
-        largest_contour1 = max(contours1, key=cv2.contourArea)
-        x1, y1, w1, h1 = cv2.boundingRect(largest_contour1)
-        area_percent1 = (w1 * h1) / (frame_width * frame_height)
+    if contours:
+        # Find the largest contour
+        largest_contour = max(contours, key=cv2.contourArea)
+        x, y, w, h = cv2.boundingRect(largest_contour)
+        area = w * h
+        frame_area = frame_width * frame_height
+        area_percent = area / frame_area
         
-        # Only consider valid crops (not too small, not the entire frame)
-        if 0.1 < area_percent1 < 0.95:
-            crops.append((x1, y1, w1, h1, area_percent1, "basic"))
-    
-    # Approach 2: Adaptive thresholding (works well for varying lighting)
-    adaptive_thresh = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-        cv2.THRESH_BINARY_INV if is_light_background else cv2.THRESH_BINARY, 
-        11, 2
-    )
-    cv2.imwrite(f"{debug_prefix}_thresh_adaptive.jpg", adaptive_thresh)
-    
-    # Find contours in the adaptive threshold image
-    contours2, _ = cv2.findContours(adaptive_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    if contours2:
-        largest_contour2 = max(contours2, key=cv2.contourArea)
-        x2, y2, w2, h2 = cv2.boundingRect(largest_contour2)
-        area_percent2 = (w2 * h2) / (frame_width * frame_height)
+        print(f"Largest contour found: x={x}, y={y}, w={w}, h={h}, area%={area_percent:.2%}")
         
-        # Only consider valid crops
-        if 0.1 < area_percent2 < 0.95:
-            crops.append((x2, y2, w2, h2, area_percent2, "adaptive"))
-    
-    # Approach 3: Edge detection (good for finding boundaries)
-    edges = cv2.Canny(gray, 100, 200)
-    # Dilate to connect nearby edges
-    kernel = np.ones((5,5), np.uint8)
-    dilated_edges = cv2.dilate(edges, kernel, iterations=1)
-    cv2.imwrite(f"{debug_prefix}_edges.jpg", dilated_edges)
-    
-    # Find contours in the edge image
-    contours3, _ = cv2.findContours(dilated_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    if contours3:
-        largest_contour3 = max(contours3, key=cv2.contourArea)
-        x3, y3, w3, h3 = cv2.boundingRect(largest_contour3)
-        area_percent3 = (w3 * h3) / (frame_width * frame_height)
-        
-        # Only consider valid crops
-        if 0.1 < area_percent3 < 0.95:
-            crops.append((x3, y3, w3, h3, area_percent3, "edge"))
-    
-    # If no good crops found from the above approaches, use a fallback method
-    if not crops:
-        # For light backgrounds, try a different threshold value
-        if is_light_background:
-            _, thresh_fallback = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
-            cv2.imwrite(f"{debug_prefix}_thresh_fallback.jpg", thresh_fallback)
+        # Sanity check: Ensure the detected area is reasonably sized
+        if 0.1 < area_percent < 0.98: # Area between 10% and 98% of frame
+            best_crop = (x, y, w, h)
+            method = "inRange"
+            print(f"Selected crop method: {method}, area: {area_percent:.2%}")
+        else:
+            print(f"Largest contour area ({area_percent:.2%}) outside valid range (10%-98%). Falling back.")
             
-            contours_fallback, _ = cv2.findContours(thresh_fallback, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            if contours_fallback:
-                largest_contour_fallback = max(contours_fallback, key=cv2.contourArea)
-                x_fb, y_fb, w_fb, h_fb = cv2.boundingRect(largest_contour_fallback)
-                area_percent_fb = (w_fb * h_fb) / (frame_width * frame_height)
-                
-                # More permissive area range
-                if 0.05 < area_percent_fb < 0.98:
-                    crops.append((x_fb, y_fb, w_fb, h_fb, area_percent_fb, "fallback"))
-    
-    # Last resort: If all else fails, use a reasonable fixed crop with margins
-    if not crops:
-        print("All detection methods failed. Using a conservative default crop.")
+    # If no valid contour found, use the default fallback
+    if best_crop is None:
+        print("inRange detection failed or produced invalid area. Using a conservative default crop.")
+        method = "default"
         # Use a reasonable default that works for most Instagram memes
         margin_x = int(frame_width * 0.05)  # 5% margin from edges
         margin_top = int(frame_height * 0.25)  # 25% from top (to skip caption area)
         margin_bottom = int(frame_height * 0.05)  # 5% from bottom
         
-        x_default = margin_x
-        y_default = margin_top
-        w_default = frame_width - (2 * margin_x)
-        h_default = frame_height - margin_top - margin_bottom
+        x = margin_x
+        y = margin_top
+        w = frame_width - (2 * margin_x)
+        h = frame_height - margin_top - margin_bottom
         
-        crops.append((x_default, y_default, w_default, h_default, 0.7, "default"))
-    
-    # Choose the best crop (for now, select the one with the largest area that's not too large)
-    # Sort crops by area percentage in descending order
-    crops.sort(key=lambda c: c[4], reverse=True)
-    
-    # Select the first valid crop
-    for crop in crops:
-        x, y, w, h, area_percent, method = crop
-        print(f"Selected crop method: {method}, area: {area_percent:.2%}")
+        best_crop = (x, y, w, h)
+
+    # Draw the final crop rectangle on the frame for debugging - REMOVED FOR PRODUCTION
+    # x_draw, y_draw, w_draw, h_draw = best_crop # Use separate variables for drawing if needed
+    # debug_frame = frame.copy()
+    # cv2.rectangle(debug_frame, (x_draw, y_draw), (x_draw + w_draw, y_draw + h_draw), (0, 255, 0), 3)
+    # cv2.putText(debug_frame, f"{method}: {w_draw}x{h_draw} @ ({x_draw},{y_draw})", (x_draw, y_draw-10), 
+    #            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    # cv2.imwrite(f"{debug_prefix}_crop_final.jpg", debug_frame)
         
-        # Draw the crop rectangle on the frame for debugging
-        debug_frame = frame.copy()
-        cv2.rectangle(debug_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        cv2.putText(debug_frame, f"{method}: {area_percent:.2%}", (x, y-10), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        cv2.imwrite(f"{debug_prefix}_crop_{method}.jpg", debug_frame)
-        
-        return (x, y, w, h)
-    
-    # Should not reach here since we have a default fallback
-    return None
+    return best_crop
 
 def crop_video_with_params(video_path, crop_params, output_dir="cropped"):
     """

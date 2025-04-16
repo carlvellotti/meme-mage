@@ -75,8 +75,11 @@ def cleanup_files(*file_paths):
     for file_path in file_paths:
         if file_path and isinstance(file_path, str) and os.path.exists(file_path):
             try:
+                # Re-enable file removal
                 os.remove(file_path)
                 print(f"Removed temporary file: {file_path}")
+                # print(f"Skipping removal of {file_path} for debugging.")
+                # pass # Do nothing
             except OSError as e:
                 print(f"Error removing file {file_path}: {e}")
         # else:
