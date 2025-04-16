@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { MemeTemplate } from '@/lib/supabase/types';
 import { nameToSlug } from '@/lib/utils/slugUtils';
 import { useRouter } from 'next/navigation';
@@ -12,66 +12,87 @@ interface Props {
   onToggleMode?: () => void;
 }
 
+const TEMPLATES_PER_PAGE = 12;
+
 export default function TemplateBrowser({ 
   onSelectTemplate, 
   onCreateFromTemplate,
   isGreenscreenMode = false,
   onToggleMode
 }: Props) {
-  const [templates, setTemplates] = useState<MemeTemplate[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [visibleTemplates, setVisibleTemplates] = useState<MemeTemplate[]>([]);
+  // State variables
+  const [loadedTemplates, setLoadedTemplates] = useState<MemeTemplate[]>([]);
   const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [hoveredTemplate, setHoveredTemplate] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Refs and hooks
   const router = useRouter();
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement>(null);
-  const TEMPLATES_PER_PAGE = 12;
 
-  const fetchTemplates = async () => {
+  // Fetch templates function (modified for pagination)
+  const fetchTemplatesPage = useCallback(async (pageNum: number, isRefresh = false) => {
+    if (pageNum === 1) {
+      setIsLoading(true);
+    } else {
+      setIsLoadingMore(true);
+    }
+    setError(null);
+
     try {
-      const response = await fetch('/api/templates?t=' + new Date().getTime());
+      const response = await fetch(`/api/templates?page=${pageNum}&limit=${TEMPLATES_PER_PAGE}&t=${new Date().getTime()}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch templates');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch templates');
       }
-      const data = await response.json();
-      setTemplates(data);
-      return data;
+      const data: { templates: MemeTemplate[], totalCount: number } = await response.json();
+
+      setLoadedTemplates(prev => isRefresh ? data.templates : [...prev, ...data.templates]);
+      setTotalCount(data.totalCount);
+      setPage(pageNum);
+      setHasMore( (isRefresh ? data.templates.length : loadedTemplates.length + data.templates.length) < data.totalCount );
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load templates');
-      return [];
+      setHasMore(false);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
+      if (isRefresh) setIsRefreshing(false);
     }
-  };
-
-  const refreshTemplates = async () => {
-    setIsRefreshing(true);
-    await fetchTemplates();
-    setIsRefreshing(false);
-  };
-
-  useEffect(() => {
-    fetchTemplates();
   }, []);
 
-  // Update visible templates when templates or page changes
   useEffect(() => {
-    if (templates.length > 0) {
-      setVisibleTemplates(templates.slice(0, page * TEMPLATES_PER_PAGE));
-    }
-  }, [templates, page]);
+    fetchTemplatesPage(1, true);
+  }, [fetchTemplatesPage]);
 
-  // Set up intersection observer for infinite scrolling
+  const refreshTemplates = useCallback(async () => {
+    setIsRefreshing(true);
+    setLoadedTemplates([]);
+    setPage(1);
+    setHasMore(true);
+    setTotalCount(null);
+    if (observerRef.current && loadingRef.current) {
+        try {
+            observerRef.current.unobserve(loadingRef.current);
+        } catch(e) { /* ignore */ }
+    }
+    await fetchTemplatesPage(1, true);
+  }, []);
+
   useEffect(() => {
-    if (loadingRef.current) {
+    if (hasMore && !isLoading && !isLoadingMore && loadingRef.current) {
       observerRef.current = new IntersectionObserver(
         (entries) => {
-          if (entries[0].isIntersecting && visibleTemplates.length < templates.length) {
-            // Load more templates when the loading element is visible
-            setPage((prevPage) => prevPage + 1);
+          if (entries[0].isIntersecting) {
+            console.log('Intersection detected, fetching next page...', page + 1);
+            fetchTemplatesPage(page + 1);
           }
         },
         { threshold: 0.1 }
@@ -82,10 +103,14 @@ export default function TemplateBrowser({
 
     return () => {
       if (observerRef.current && loadingRef.current) {
-        observerRef.current.unobserve(loadingRef.current);
+        try {
+            observerRef.current.unobserve(loadingRef.current);
+        } catch (e) {
+            console.warn("Error unobserving loadingRef:", e)
+        }
       }
     };
-  }, [visibleTemplates, templates]);
+  }, [hasMore, isLoading, isLoadingMore, page]);
 
   const handleCardClick = (template: MemeTemplate) => {
     router.push(`/template/${nameToSlug(template.name)}`);
@@ -99,17 +124,17 @@ export default function TemplateBrowser({
     setHoveredTemplate(null);
   };
 
-  if (isLoading) return <div className="text-gray-300">Loading templates...</div>;
-  if (error) return <div className="text-red-400">Error: {error}</div>;
+  if (isLoading && page === 1) return <div className="text-gray-300">Loading templates...</div>;
+  if (error && loadedTemplates.length === 0) return <div className="text-red-400">Error: {error}</div>;
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-white">Templates</h2>
+        <h2 className="text-xl font-semibold text-white">Templates {totalCount !== null ? `(${totalCount})` : ''}</h2>
         <button 
           onClick={refreshTemplates}
-          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center space-x-1"
-          disabled={isRefreshing}
+          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center space-x-1 disabled:opacity-50"
+          disabled={isRefreshing || isLoading}
         >
           <svg 
             className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} 
@@ -129,8 +154,12 @@ export default function TemplateBrowser({
         </button>
       </div>
       
+      {error && loadedTemplates.length > 0 && (
+          <div className="text-red-400 text-center p-2 bg-red-900/20 rounded">Error loading more templates: {error}</div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {visibleTemplates.map((template) => {
+        {loadedTemplates.map((template) => {
           const isHovered = hoveredTemplate === template.id;
           
           return (
@@ -142,7 +171,6 @@ export default function TemplateBrowser({
                   : 'hover:border-blue-400 hover:shadow-md'
               }`}
               onClick={(e) => {
-                // Only navigate if the click wasn't on the video
                 if (!(e.target as HTMLElement).closest('video')) {
                   handleCardClick(template);
                 }
@@ -150,7 +178,6 @@ export default function TemplateBrowser({
               onMouseEnter={() => handleMouseEnter(template.id)}
               onMouseLeave={handleMouseLeave}
             >
-              {/* Title - full when hovered, truncated otherwise */}
               <h3 
                 className={`font-medium text-white text-lg mb-3 ${isHovered ? '' : 'truncate'}`}
                 title={template.name}
@@ -158,7 +185,6 @@ export default function TemplateBrowser({
                 {template.name}
               </h3>
 
-              {/* Video container with improved transition */}
               <div 
                 className="relative overflow-hidden rounded-md bg-gray-800"
                 style={{
@@ -169,6 +195,7 @@ export default function TemplateBrowser({
               >
                 <video
                   src={template.video_url}
+                  poster={template.poster_url || ''}
                   className={`rounded w-full ${
                     isHovered ? 'object-contain' : 'object-cover h-full'
                   }`}
@@ -177,7 +204,7 @@ export default function TemplateBrowser({
                     transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
                   }}
                   controls
-                  onClick={(e) => e.stopPropagation()} // Allow video controls to work without navigating
+                  onClick={(e) => e.stopPropagation()} 
                   preload="metadata"
                 />
               </div>
@@ -186,15 +213,15 @@ export default function TemplateBrowser({
         })}
       </div>
 
-      {/* Loading element for infinite scroll */}
-      {visibleTemplates.length < templates.length && (
+      {hasMore && (
         <div ref={loadingRef} className="col-span-full flex justify-center py-4">
-          <div className="text-gray-400">Loading more templates...</div>
+          <div className="text-gray-400">
+            {isLoadingMore ? 'Loading more templates...' : 'Scroll to load more'} 
+          </div>
         </div>
       )}
 
-      {/* Empty state */}
-      {templates.length === 0 && !isLoading && (
+      {!isLoading && loadedTemplates.length === 0 && !error && (
         <div className="text-center py-8 text-gray-300">
           <p>No templates found.</p>
         </div>
