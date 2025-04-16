@@ -37,11 +37,12 @@ The integration has been divided into the following chunks:
 **Key Decisions/Notes**: Added `httpx`, `python-magic`, `supabase-py`, `python-dotenv`. Required `libmagic` system dependency installation. Resolved `.env` loading for direct script execution using `python-dotenv`. Handled ambiguity between `SUPABASE_SERVICE_KEY` and `SUPABASE_SERVICE_ROLE_KEY`. Refactored DB access from `psycopg2` to `supabase-py` due to direct connection restrictions. Successfully tested end-to-end pipeline via direct script execution. **Created and tested the `DELETE /api/unprocessed-templates/[id]` API route needed for Chunk 3.**
 
 ### [Chunk 3: Frontend Components](./chunk_3_frontend_components.md)
-**(Planned Next)**
+**Focus**: User interface components for submitting URLs and displaying/selecting unprocessed templates.
+**Status**: Completed.
 
-**Focus**: User interface components for submitting URLs and displaying unprocessed templates.
+**Key Deliverables**: `ReelScraperForm` component, `UnprocessedTemplatesTable` component (with pagination, video preview), Modifications to `TemplateUploader` (handling selected template data, source URL, deletion).
 
-**Key Deliverables**: `ReelScraperForm` component, `UnprocessedTemplatesTable` component, Modifications to `TemplateUploader`.
+**Key Decisions/Notes**: Debugged Python execution environment issues (`ModuleNotFoundError`, `proxy` argument error, dependency pinning). Implemented API route synchronization (waits for Python script). Added pagination, video preview modal. Removed status column. Handled `original_source_url` persistence. Allowed duplicate URL reprocessing.
 
 ### [Chunk 4: Testing, Deployment & Monitoring](./chunk_4_testing_deployment.md)
 **(Planned Last)**
@@ -54,12 +55,12 @@ The integration has been divided into the following chunks:
 
 The following is the updated suggested timeline:
 
-1.  **Chunk 1 (Backend Setup & Basic API)**: ~2-3 days (Completed)
-2.  **Chunk 2 (Storage & File Processing)**: ~3-4 days (Completed)
-3.  **Chunk 3 (Frontend Components)**: ~2-3 days
+1.  **Chunk 1 (Backend Setup & Basic API)**: Completed
+2.  **Chunk 2 (Storage & File Processing)**: Completed
+3.  **Chunk 3 (Frontend Components)**: Completed (~3-4 days, including debugging)
 4.  **Chunk 4 (Testing & Deployment)**: ~2-3 days
 
-**Total Estimated Time**: 9-13 days (excluding potential delays resolving DB connection methods or external API issues).
+**Total Estimated Time**: ~10-14 days (excluding potential delays resolving DB connection methods or external API issues).
 
 ## Dependencies and Risks
 

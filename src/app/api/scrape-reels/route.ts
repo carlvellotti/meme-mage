@@ -47,65 +47,73 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Server configuration error: Missing Supabase service key.' }, { status: 500 });
     }
 
-    // Spawn the Python process
-    console.log(`[API /api/scrape-reels] Spawning Python script...`);
-    const pythonProcess = spawn(pythonExecutable, [scriptPath, ...urls], {
-        cwd: scriptDir, // Set working directory to the script's location
-        env: scriptEnv,
-        stdio: ['ignore', 'pipe', 'pipe'], // stdin, stdout, stderr
-    });
+    // --- Wrap spawn in a Promise to wait for completion ---
+    const runPythonScript = (): Promise<{ code: number | null; stdout: string; stderr: string }> => {
+      return new Promise((resolve, reject) => {
+        console.log(`[API /api/scrape-reels] Spawning Python script...`);
+        const pythonProcess = spawn(pythonExecutable, [scriptPath, ...urls], {
+          cwd: scriptDir,
+          env: scriptEnv,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
 
-    let stdout = '';
-    let stderr = '';
+        let stdout = '';
+        let stderr = '';
 
-    pythonProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      stdout += output;
-      // Log Python output lines individually for better readability
-      output.split('\n').forEach((line: string) => {
-        if (line.trim()) {
-          console.log(`[Python STDOUT]: ${line.trim()}`);
-        }
+        pythonProcess.stdout.on('data', (data) => {
+          const output = data.toString();
+          stdout += output;
+          output.split('\n').forEach((line: string) => {
+            if (line.trim()) {
+              console.log(`[Python STDOUT]: ${line.trim()}`);
+            }
+          });
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+          const errorOutput = data.toString();
+          stderr += errorOutput;
+          errorOutput.split('\n').forEach((line: string) => {
+            if (line.trim()) {
+              console.error(`[Python STDERR]: ${line.trim()}`);
+            }
+          });
+        });
+
+        pythonProcess.on('close', (code) => {
+          console.log(`[API /api/scrape-reels] Python script finished with code ${code}.`);
+          resolve({ code, stdout, stderr }); // Resolve the promise when the process closes
+        });
+
+        pythonProcess.on('error', (err) => {
+          console.error('[API /api/scrape-reels] Failed to start Python subprocess.', err);
+          reject(err); // Reject the promise if spawning fails
+        });
       });
-    });
+    };
 
-    pythonProcess.stderr.on('data', (data) => {
-      const errorOutput = data.toString();
-      stderr += errorOutput;
-      errorOutput.split('\n').forEach((line: string) => {
-        if (line.trim()) {
-          console.error(`[Python STDERR]: ${line.trim()}`);
-        }
-      });
-    });
+    // --- Execute the script and wait for the result ---
+    try {
+      const { code, stdout, stderr } = await runPythonScript();
 
-    // Handle process exit - This happens *after* the API has responded
-    pythonProcess.on('close', (code) => {
-      console.log(`[API /api/scrape-reels] Python script finished with code ${code}.`);
-      if (code !== 0) {
-        console.error(`[API /api/scrape-reels] Python script failed. Final STDERR:
-${stderr}`);
-        // TODO CHUNK 3/4: Implement more robust error handling/notification.
-        // - Could involve updating DB records for the affected URLs to 'failed'.
-        // - Could send a notification (e.g., via WebSocket or to an admin dashboard).
+      if (code === 0) {
+        console.log('[API /api/scrape-reels] Python script completed successfully. Responding 200 OK.');
+        return NextResponse.json({ 
+          message: `Successfully processed ${urls.length} URLs.`, 
+          output: stdout // Optionally include stdout in response
+        });
       } else {
-        console.log(`[API /api/scrape-reels] Python script completed successfully. Final STDOUT:
-${stdout}`);
-        // TODO CHUNK 3/4: Potentially trigger follow-up actions or notifications.
-        // - Notify frontend via WebSocket?
-        // - Mark batch as completed?
+        console.error(`[API /api/scrape-reels] Python script failed with code ${code}. Responding 500.`);
+        return NextResponse.json({ 
+          error: `Python script failed with exit code ${code}.`, 
+          details: stderr // Include stderr for debugging
+        }, { status: 500 });
       }
-    });
-
-    pythonProcess.on('error', (err) => {
-        console.error('[API /api/scrape-reels] Failed to start Python subprocess.', err);
-        // This usually indicates a problem finding the python executable or the script itself.
-        // TODO: Notify admin or implement fallback?
-    });
-
-    // Respond immediately to the client - DO NOT wait for the Python script to finish.
-    console.log('[API /api/scrape-reels] Responding 202 Accepted to client.');
-    return NextResponse.json({ message: `Processing initiated for ${urls.length} URLs. Check server logs for progress.` }, { status: 202 });
+    } catch (spawnError) {
+      // Handle errors during the spawning process itself (e.g., python not found)
+       console.error('[API /api/scrape-reels] Error executing Python script:', spawnError);
+       return NextResponse.json({ error: 'Failed to execute backend processing script.' }, { status: 500 });
+    }
 
   } catch (error) {
     console.error('[API /api/scrape-reels] Unexpected error in POST handler:', error);
