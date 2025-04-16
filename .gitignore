@@ -39,3 +39,7 @@ next-env.d.ts
 
 # cursor mcp
 .cursor/
+
+# Python cache files
+__pycache__/
+*.pyc
