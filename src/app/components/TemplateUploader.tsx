@@ -99,6 +99,31 @@ export function TemplateUploader({
         throw new Error('Could not determine video URL');
       }
 
+      // --- BEGIN THUMBNAIL GENERATION ---
+      let thumbnailUrl: string | null = null;
+      try {
+        console.log(`Requesting thumbnail generation for ${storageUrl}...`);
+        const thumbnailResponse = await fetch('/api/generate-thumbnail', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoUrl: storageUrl }),
+        });
+
+        if (thumbnailResponse.ok) {
+          const { thumbnailUrl: receivedUrl } = await thumbnailResponse.json();
+          thumbnailUrl = receivedUrl;
+          console.log(`Thumbnail generated successfully: ${thumbnailUrl}`);
+        } else {
+          const errorText = await thumbnailResponse.text();
+          console.error(`Thumbnail generation failed: ${thumbnailResponse.status} - ${errorText}`);
+          toast.error('Video uploaded, but thumbnail generation failed.'); // Inform user, but don't block
+        }
+      } catch (thumbError) {
+        console.error('Error calling thumbnail generation API:', thumbError);
+        toast.error('Video uploaded, but thumbnail generation encountered an error.'); // Inform user
+      }
+      // --- END THUMBNAIL GENERATION ---
+
       // 2. Generate embedding (existing logic)
       const textForEmbedding = `${templateName}. ${templateExplanation}`.trim()
       if (!textForEmbedding) {
@@ -123,7 +148,7 @@ export function TemplateUploader({
         throw new Error('Received invalid embedding from API');
       }
 
-      // 3. Create database entry (add original_source_url)
+      // 3. Create database entry (add original_source_url and poster_url)
       console.log('Saving template to database...');
       const { error: dbError, data: dbData } = await supabase
         .from('meme_templates')
@@ -134,7 +159,8 @@ export function TemplateUploader({
           embedding,
           is_greenscreen: isGreenscreen,
           uploader_name: uploaderName,
-          original_source_url: initialSourceUrl
+          original_source_url: initialSourceUrl,
+          poster_url: thumbnailUrl
         })
         .select()
         .single();

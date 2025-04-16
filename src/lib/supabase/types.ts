@@ -46,6 +46,7 @@ export interface MemeTemplate {
   video_url: string;
   instructions: string;
   embedding?: number[];
+  poster_url?: string | null;
   created_at?: string;
   examples?: string[];
   tags?: string[];
