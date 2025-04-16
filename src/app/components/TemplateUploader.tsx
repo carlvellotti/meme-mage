@@ -4,7 +4,29 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'react-hot-toast'
 
-export function TemplateUploader() {
+// Define the UnprocessedTemplate type (or import if defined elsewhere)
+interface UnprocessedTemplate {
+  id: string;
+  cropped_video_url?: string | null;
+  caption_text?: string | null;
+  // ... other fields if needed
+}
+
+interface TemplateUploaderProps {
+  initialVideoUrl?: string;        // Added
+  initialExplanation?: string;     // Added
+  unprocessedTemplateId?: string;  // Added
+  initialSourceUrl?: string;       // Added
+  onTemplateUploaded?: () => void; // Added
+}
+
+export function TemplateUploader({ 
+  initialVideoUrl,
+  initialExplanation,
+  unprocessedTemplateId,
+  initialSourceUrl,
+  onTemplateUploaded
+}: TemplateUploaderProps) {
   const [templateName, setTemplateName] = useState('')
   const [templateExplanation, setTemplateExplanation] = useState('')
   const [uploaderName, setUploaderName] = useState('')
@@ -17,6 +39,20 @@ export function TemplateUploader() {
   const [pastedImages, setPastedImages] = useState<string[]>([])
   const [isEnhancing, setIsEnhancing] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Effect to handle initial values from props
+  useEffect(() => {
+    if (initialExplanation) {
+      setTemplateExplanation(initialExplanation)
+    }
+  }, [initialExplanation])
+
+  useEffect(() => {
+    if (initialVideoUrl) {
+      setPreview(initialVideoUrl) // Set preview directly from URL
+      setFile(null) // Clear any selected file if initial URL is provided
+    }
+  }, [initialVideoUrl])
 
   // Auto-resize textarea when content changes
   useEffect(() => {
@@ -34,25 +70,41 @@ export function TemplateUploader() {
     setLoading(true)
     setError(null)
 
+    let storageUrl = '';
+
     try {
-      if (!file) {
-        throw new Error('Please select a video file')
+      // 1. Handle file upload OR use initialVideoUrl
+      if (file) {
+        console.log('Uploading new file...');
+        const filename = `${Date.now()}-${file.name}`
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('meme-templates')
+          .upload(filename, file)
+
+        if (uploadError) throw uploadError
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('meme-templates')
+          .getPublicUrl(uploadData.path)
+        storageUrl = publicUrl;
+        console.log('File uploaded, URL:', storageUrl);
+      } else if (initialVideoUrl) {
+        console.log('Using initial video URL:', initialVideoUrl);
+        storageUrl = initialVideoUrl; // Use the provided URL directly
+      } else {
+        throw new Error('No video file selected or provided')
       }
 
-      // Handle file upload
-      const filename = `${Date.now()}-${file.name}`
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('meme-templates')
-        .upload(filename, file)
+      if (!storageUrl) {
+        throw new Error('Could not determine video URL');
+      }
 
-      if (uploadError) throw uploadError
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('meme-templates')
-        .getPublicUrl(uploadData.path)
-
-      // Generate embedding from name and instructions
+      // 2. Generate embedding (existing logic)
       const textForEmbedding = `${templateName}. ${templateExplanation}`.trim()
+      if (!textForEmbedding) {
+        throw new Error('Template name and explanation cannot be empty for embedding generation.');
+      }
+      console.log('Generating embedding for:', textForEmbedding.substring(0, 100) + '...');
       const embeddingResponse = await fetch('/api/embeddings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -60,40 +112,77 @@ export function TemplateUploader() {
       });
 
       if (!embeddingResponse.ok) {
-        throw new Error('Failed to generate embedding');
+        const errorText = await embeddingResponse.text();
+        console.error('Embedding API Error:', errorText);
+        throw new Error(`Failed to generate embedding: ${errorText}` || 'Failed to generate embedding');
       }
 
       const { embedding } = await embeddingResponse.json();
-      console.log('Embedding to store:', embedding.length); // Should be 1536
+      console.log('Embedding received, length:', embedding?.length);
+      if (!embedding || embedding.length === 0) {
+        throw new Error('Received invalid embedding from API');
+      }
 
-      // Create database entry with isGreenscreen flag
-      const { error: dbError, data } = await supabase
+      // 3. Create database entry (add original_source_url)
+      console.log('Saving template to database...');
+      const { error: dbError, data: dbData } = await supabase
         .from('meme_templates')
         .insert({
           name: templateName,
           instructions: templateExplanation,
-          video_url: publicUrl,
+          video_url: storageUrl,
           embedding,
           is_greenscreen: isGreenscreen,
-          uploader_name: uploaderName
+          uploader_name: uploaderName,
+          original_source_url: initialSourceUrl
         })
         .select()
         .single();
 
       if (dbError) {
-        console.error('DB Error:', dbError);
+        console.error('DB Insert Error:', dbError);
         throw dbError;
       }
 
-      console.log('Stored template with embedding:', data);
+      console.log('Template saved successfully:', dbData);
 
-      // Reset form
+      // 4. Delete from unprocessed_templates if applicable (NEW LOGIC)
+      if (unprocessedTemplateId) {
+        console.log(`Attempting to delete unprocessed template ID: ${unprocessedTemplateId}`);
+        try {
+          const deleteResponse = await fetch(`/api/unprocessed-templates/${unprocessedTemplateId}`, {
+            method: 'DELETE',
+          });
+
+          if (!deleteResponse.ok) {
+            // Log error but don't block success toast if main upload worked
+            const deleteErrorText = await deleteResponse.text();
+            console.error(`Failed to delete unprocessed template ${unprocessedTemplateId}. Status: ${deleteResponse.status}. Error: ${deleteErrorText}`);
+            toast.error(`Template saved, but failed to remove from unprocessed list (ID: ${unprocessedTemplateId}).`);
+          } else {
+            console.log(`Successfully deleted unprocessed template ID: ${unprocessedTemplateId}`);
+          }
+        } catch (deleteFetchError) {
+          console.error(`Error making DELETE request for unprocessed template ${unprocessedTemplateId}:`, deleteFetchError);
+          toast.error(`Template saved, but encountered an error removing from unprocessed list (ID: ${unprocessedTemplateId}).`);
+        }
+      }
+
+      // 5. Reset form and notify parent
       setFile(null)
       setPreview('')
       setTemplateName('')
       setTemplateExplanation('')
       setPastedImages([])
+      setIsGreenscreen(false) // Reset greenscreen toggle
+      // Clear internal state related to initial props if needed, although they should be overwritten on next selection
+
       toast.success('Template uploaded successfully!')
+      
+      // Call the callback if provided
+      if (onTemplateUploaded) {
+        onTemplateUploaded()
+      }
 
     } catch (err) {
       console.error('Error details:', err)
@@ -461,17 +550,15 @@ export function TemplateUploader() {
         )}
       </div>
 
+      {error && <p className="text-red-400 text-sm">{error}</p>}
+
       <button
         type="submit"
-        disabled={loading || !file || !templateName}
-        className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
+        disabled={loading || (!file && !preview) || !templateName.trim() || !templateExplanation.trim()}
+        className="w-full py-3 px-4 bg-blue-600 text-white rounded-md font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {loading ? 'Uploading...' : 'Upload Template'}
       </button>
-
-      {error && (
-        <div className="text-red-400 text-sm mt-2">{error}</div>
-      )}
     </form>
   )
 } 
