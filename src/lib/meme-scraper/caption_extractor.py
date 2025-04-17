@@ -6,10 +6,17 @@ import json
 from pathlib import Path
 import base64
 import requests
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Google Cloud Vision API setup
-# Using the provided token as an API key
-API_KEY = "AIzaSyCEhr56raKurvj6fAcMTsvAvmaL-JU5voc"
+# Use environment variable for API key
+API_KEY = os.getenv("GOOGLE_VISION_API_KEY")
+if not API_KEY:
+    raise ValueError("GOOGLE_VISION_API_KEY environment variable not set")
+
 VISION_API_URL = "https://vision.googleapis.com/v1/images:annotate"
 
 def extract_top_region(image_path):
