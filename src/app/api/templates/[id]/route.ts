@@ -131,9 +131,8 @@ export async function PATCH(
     }
 
     console.log(`[PATCH /api/templates/${id}] Update successful.`);
-    return NextResponse.json({ message: 'Template updated successfully', template: data }, { status: 200 });
-    // Or return 204 No Content if you don't need the updated object back
-    // return new NextResponse(null, { status: 204 });
+    // Return the updated template object directly
+    return NextResponse.json(data, { status: 200 });
 
   } catch (error: any) {
     console.error(`[PATCH /api/templates/${id}] Error updating template:`, error);

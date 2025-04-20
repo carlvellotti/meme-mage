@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
           throw error;
         }
 
-        const response = NextResponse.json({ templates: data || [] });
+        // Return the array directly, not nested in an object
+        const response = NextResponse.json(data || []); 
         // Add headers to prevent caching
         response.headers.set('Cache-Control', 'no-store, max-age=0');
         response.headers.set('Pragma', 'no-cache');
