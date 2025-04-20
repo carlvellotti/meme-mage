@@ -2,73 +2,85 @@
 
 ## Objective
 
-Modify the Instagram Reel scraping process (`/api/scrape-reels`) to directly populate the main `templates` table with AI-generated analysis and mark them as unreviewed.
+Modify the Instagram Reel scraping process, primarily within the Python script (`src/lib/meme-scraper/process_reels.py`), to directly populate the main `meme_templates` table with AI-generated analysis and mark them as unreviewed (`reviewed = false`). This involves removing the script's reliance on `db_manager.py` and the old processing flow, replacing it with calls to Node.js helper APIs and direct insertion into `meme_templates` using `supabase-py`. The Node.js API route (`/api/scrape-reels`) will continue to invoke this Python script.
 
 ## Related Files
 
-*   `src/app/api/scrape-reels/route.ts` (Primary file to modify)
-*   `src/app/api/analyze-video-template/route.ts` (To be called by the scraper)
-*   `src/lib/supabase/admin.ts` or equivalent (For database interactions)
-*   `src/lib/utils/embeddingUtils.ts` (Assuming embedding logic exists here or needs creation)
+*   `src/lib/meme-scraper/process_reels.py` (Primary file to modify)
+*   `src/lib/meme-scraper/db_manager.py` (Usage to be removed from `process_reels.py`)
+*   `src/lib/meme-scraper/storage_uploader.py` (Existing usage for video upload remains)
+*   `src/app/api/scrape-reels/route.ts` (Invokes the Python script, may need env var updates)
+*   `src/app/api/analyze-video-template/route.ts` (To be called by the Python script)
+*   `src/app/api/embeddings/route.ts` (To be called by the Python script)
+*   `src/app/api/generate-thumbnail/route.ts` (To be called by the Python script)
+*   Python libraries: `requests`, `supabase-py` (install required)
 
 ## Database Changes Required (Manual / Migration)
 
-*   **Add `reviewed` column to `templates` table:**
-    *   `ALTER TABLE templates ADD COLUMN reviewed BOOLEAN NULL DEFAULT FALSE;`
-    *   Existing templates can remain NULL or be backfilled to TRUE if considered reviewed.
+*   **Add `reviewed` column to `meme_templates` table:**
+    *   `ALTER TABLE meme_templates ADD COLUMN reviewed BOOLEAN NULL DEFAULT NULL;`
+    *   Note: The default is `NULL`, but the script will insert `FALSE`. Existing templates can remain `NULL` or be backfilled to `TRUE` if considered reviewed.
 
-## Tasks (`/api/scrape-reels` Backend)
+## Tasks (Modify `src/lib/meme-scraper/process_reels.py`)
 
-1.  **Modify Input Handling:** No changes needed, still accepts `{ urls: string[] }`.
-
-2.  **Iterate Through URLs:** For each valid Instagram Reel URL:
-    *   Perform existing scraping logic to get video (likely involves downloading, potentially cropping if still needed).
-    *   Extract the `caption_text` from the Reel metadata.
-    *   Store the final public video URL (e.g., Supabase Storage URL).
-    *   **Generate Poster:** Ensure poster/thumbnail generation still occurs and the `poster_url` is obtained.
-
-3.  **Call Analysis API:**
-    *   After obtaining the video URL and `caption_text`:
-    *   Make a `POST` request to `http://localhost:3000/api/analyze-video-template` (or use an internal function call if refactored).
-    *   **Body:** Send `{ videoUrl: finalVideoUrl, exampleCaption: caption_text }`.
-    *   Handle the response: `const { analysis, suggestedName } = await analysisResponse.json();`.
-    *   **Error Handling:** If the analysis API call fails:
-        *   Log the error.
-        *   Set `analysis` to an empty string (`''`) or a placeholder like `"Analysis failed."`. 
-        *   Set `suggestedName` to a placeholder derived from the URL or caption (e.g., `"Untitled Template - ${Date.now()}"`).
-
-4.  **Generate Embedding:**
-    *   Use the obtained `analysis` string (even if empty/placeholder) as the input text.
-    *   Call the embedding generation function (e.g., using OpenAI's API via Supabase Edge Functions or directly).
-    *   Obtain the resulting embedding vector.
-    *   **Error Handling:** If embedding generation fails, log the error and set the embedding to `null` or handle according to DB schema constraints.
-
-5.  **Insert into `templates` Table:**
-    *   Construct the data object for the new template record:
-        *   `name`: Use `suggestedName` from analysis API response (or placeholder).
-        *   `video_url`: `finalVideoUrl`.
-        *   `poster_url`: Generated `poster_url`.
-        *   `instructions`: Use `analysis` from analysis API response (or placeholder).
-        *   `instagram_url`: The original input Reel URL.
-        *   `embedding`: The generated embedding vector (or null).
-        *   `reviewed`: `FALSE`.
-        *   `uploader_name`: Set appropriately (e.g., "Scraper", or potentially track user if scraping is user-initiated).
-    *   Use the Supabase admin client (or equivalent) to insert this record into the `templates` table.
-    *   Handle potential database insertion errors.
-
-6.  **Response:** Modify the overall response of the `/api/scrape-reels` endpoint to reflect the outcome (e.g., number successfully processed and added for review).
+1.  **Dependencies & Environment:** Add imports for `requests`, `supabase`, `os`, `shutil`. Ensure environment variables `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `NODE_API_BASE_URL` (e.g., `http://localhost:3000`) are available.
+2.  **Remove Old DB Logic:** Delete all calls to functions from `db_manager.py` (`insert_pending_reel`, `update_template_urls`, `update_template_error`, `update_template_status`).
+3.  **Initialize Supabase Client:** Create a Supabase client instance using `supabase.create_client()` with the URL and Service Role Key.
+4.  **Modify `process_url` Loop:** For each URL:
+    *   **Keep Existing Steps:** Download video (`downloader.py`), extract frame (`frame_extractor.py`), crop video (`video_cropper.py`), extract caption (`caption_extractor.py`). Retain `video_path`, `frame_path`, `cropped_video_path`, `caption_text`.
+    *   **Upload Cropped Video:** Use existing `storage_uploader.py` logic to upload `cropped_video_path` to Supabase Storage -> Get `finalVideoUrl`. Handle errors.
+    *   **Call Thumbnail API (Node.js):**
+        *   `POST` request using `requests` to `{NODE_API_BASE_URL}/api/generate-thumbnail` with JSON body `{"videoUrl": finalVideoUrl}`.
+        *   Parse response to get `thumbnailUrl`. Set to `None` on error.
+    *   **Call Analysis API (Node.js):**
+        *   `POST` request using `requests` to `{NODE_API_BASE_URL}/api/analyze-video-template` with JSON body `{"videoUrl": finalVideoUrl, "exampleCaption": caption_text}`.
+        *   Parse response to get `analysis` and `suggestedName`. Set placeholders on error.
+    *   **Call Embedding API (Node.js):**
+        *   `POST` request using `requests` to `{NODE_API_BASE_URL}/api/embeddings` with JSON body `{"text": analysis}`.
+        *   Parse response to get `embeddingVector`. Set to `None` on error.
+    *   **Insert into `meme_templates` Table:**
+        *   Use the initialized `supabase-py` client.
+        *   Construct the data dictionary (including `name`, `video_url`, `poster_url=thumbnailUrl`, `instructions=analysis`, `instagram_url`, `embedding=embeddingVector`, `reviewed=False`, `uploader_name='Scraper'`).
+        *   Call `supabase.table('meme_templates').insert(data_dict).execute()`.
+        *   Handle potential `supabase.errors.APIError` during insertion.
+    *   **Enhanced Cleanup:**
+        *   Remove temporary files: `os.remove(file_path)` for `video_path`, `frame_path`, `cropped_video_path` if they exist.
+        *   Remove potential temporary directories: `shutil.rmtree(dir_path, ignore_errors=True)` for likely paths like `./captions/` and `./frames/debug/` (relative to script execution).
+    *   Return `True` on success, `False` on failure.
+5.  **Script Output:** Ensure `main` function logs overall success/failure counts based on `process_url` results.
 
 ## Key Considerations
 
-*   **Embedding Logic Location:** The function to generate embeddings needs to be accessible from the `/api/scrape-reels` backend context.
-*   **Error Robustness:** The process should be robust to failures in individual steps (scraping, analysis, embedding, DB insert) for each URL, ideally logging errors and continuing with the next URL.
-*   **Authentication/Authorization:** Ensure the scraping endpoint has appropriate security if it's user-facing.
-*   **Performance:** Processing multiple Reels, including analysis and embedding, might take time. Consider background jobs (e.g., Vercel Cron Jobs, Supabase Edge Functions with queues) for large batches if performance becomes an issue.
+*   **API Base URL:** Pass `NODE_API_BASE_URL` via environment variable. `/api/scrape-reels/route.ts` may need modification to pass this when spawning the process.
+*   **Python Dependencies:** Ensure `requests` and `supabase-py` are installed (`pip install requests supabase-py`).
+*   **Error Handling:** Implement `try...except` blocks for file operations, API calls (`requests.exceptions.RequestException`), and Supabase insert (`supabase.errors.APIError`).
+*   **Helper Script Outputs:** Assume helper scripts (`downloader`, `cropper`, etc.) create outputs in the current working directory or known relative paths for cleanup.
+*   **Authentication/Authorization:** As before, Node.js endpoints should be protected if needed. `/api/scrape-reels` should be protected.
+*   **Performance:** As before.
 
 ## Outcome
 
-*   The `/api/scrape-reels` endpoint now directly creates new entries in the main `templates` table.
-*   These new templates are marked as `reviewed = false`.
-*   They have AI-generated names and instructions (or placeholders on error).
-*   They have corresponding embeddings generated based on the AI instructions.
-*   The `unprocessed_templates` table is no longer used by this process. 
+*   Python script `process_reels.py` directly scrapes, analyzes (via API calls), and stores templates in `meme_templates` with `reviewed=False`.
+*   Removes dependency on the old `db_manager.py` flow.
+*   Includes API calls for thumbnail generation.
+*   Implements more robust cleanup of temporary files and directories.
+*   The `unprocessed_templates` table is unused by this process.
+
+---
+
+## Change Log & Complexity Note
+
+*   **Shifted Focus:** Implementation focus moved from the Node.js `/api/scrape-reels` route to the Python script `src/lib/meme-scraper/process_reels.py`.
+*   **Added Thumbnail Step:** Explicitly added the requirement for the Python script to call `/api/generate-thumbnail`.
+*   **Corrected Table Name:** Updated `templates` to `meme_templates`.
+*   **Clarified `reviewed` Default:** Noted the SQL default is `NULL`, but the script inserts `False`.
+*   **Added API Calls:** Specified the HTTP POST requests the Python script needs to make to the Node.js backend for thumbnail, analysis, and embedding generation.
+*   **Python DB Client:** Specified the need for a Python Supabase client (`supabase-py`) for the database insertion step.
+*   **Detailed Python Logic:** Incorporated understanding from `process_reels.py` review, including removal of `db_manager.py` usage and specifying interaction with `storage_uploader.py`.
+*   **Enhanced Cleanup:** Added requirement to clean up potential directories like `captions` and `frames/debug`.
+
+**Complexity Note:** This approach, while leveraging the existing Python scraper, introduces complexity by requiring communication between the Python script and multiple Node.js API endpoints. This increases potential points of failure (network errors, API availability) and requires managing dependencies and environment configurations in both Python and Node.js contexts.
+
+**Future Refactoring:** If this inter-process communication becomes problematic or difficult to manage, a future refactoring could involve:
+    1.  Rewriting the scraping logic entirely within Node.js/TypeScript, eliminating the Python dependency.
+    2.  Modifying the Python script to only perform scraping and return structured data (video path/URL, caption) to the Node.js route, which would then handle the API calls and database insertion using native JS libraries. This retains the Python scraper but centralizes the processing logic. 
