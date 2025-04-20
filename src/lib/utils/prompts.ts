@@ -83,6 +83,78 @@ IMPORTANT:
 
 If a tool called "generate_template_response" is available, use it to structure your response.`;
 
+export const getGeminiVideoAnalysisPrompt = (exampleCaption: string | null) => {
+  const basePrompt = `You are a meme template creator. Create a detailed description template of this meme based on the video provided. Your description should help match user concepts with appropriate meme templates.
+
+First, provide a concise, common name for this meme template on a single line like this:
+**Suggested Name:** [Meme Template Name]
+
+Then, structure your analysis EXACTLY as follows, starting IMMEDIATELY with section 1. Do NOT include any introductory sentences or conversational filler like "Okay, here is...".
+
+Structure your analysis as follows, keeping all your bullets succint:
+
+1. TRANSCRIPT: If provided, include the transcript of the video. If not provided, just skip this section.
+
+2. VISUAL DESCRIPTION:
+- Describe exactly what is happening visually in 5 bullet points
+- Include details about the character(s), setting, expressions, and camera angle
+- Mention any key visual elements that make this meme recognizable
+- Describe the exact moment/reaction being captured
+
+3. EMOTIONAL CONTEXT
+- Identify the core emotions, feelings, and situations where this template in 5 bullet points
+- Describe the psychological state/reaction the template captures
+- Include subtleties of the emotional tone (irony, sincerity, exaggeration)
+- Explain what makes this emotional reaction distinctive
+- Describe relationships between subjects if applicable, power dynamics or social context, who the user would identify with when using this meme
+
+4. USAGE PATTERNS:
+- List 5 typical situations where this template works well
+- Identify the types of concepts that pair naturally with this template
+- Explain what scenarios make this template especially effective
+- Include any pattern of setup-punchline that works consistently
+
+5. EXAMPLES:`;
+
+  let examplesSection = `
+${basePrompt}`;
+
+  // Always start the examples section
+  examplesSection += `
+`;
+
+  // 1. Analyze the provided example caption (if it exists)
+  if (exampleCaption) {
+    examplesSection += `
+- **Analyze Provided Example:**
+  *   **Caption:** "${exampleCaption}"
+  *   **Analysis:** [Your detailed 2-4 sentence analysis of why this specific caption works with the video goes here. Explain how it plays with the template's core emotion and leverages its unique elements.]
+`;
+  }
+
+  // 2. Generate additional hypothetical examples
+  examplesSection += `
+- **Generate Additional Examples:**
+  * Provide 2-3 additional hypothetical captions for this template.
+  * **Key Rules for Captions:**
+    * Keep them SHORT and punchy (social media style).
+    * Do NOT use quotes ("" or '') around the caption text.
+    * Think about different angles or relatable situations where this meme could apply.
+    * The video is the punchline; the caption is setup or context.
+  * For EACH additional example, provide:
+    *   **Hypothetical Caption:** [Your generated caption text here]
+    *   **Analysis:** [Your detailed 2-4 sentence analysis of why this hypothetical caption works.]
+`;
+
+  // Add concluding remarks
+  examplesSection += `
+Keep your overall tone analytical but conversational. Focus particularly on what makes this template unique and how its emotional context can be applied to various situations.
+
+Always format as MARKDOWN.`;
+
+  return examplesSection;
+};
+
 export const getTemplateAnalysisPrompt = () => `You are a meme template creator. Create a detailed description template of this meme based on the images and context I provide. Your description should help match user concepts with appropriate meme templates.
 
 Structure your analysis as follows, keeping all your bullets succint:

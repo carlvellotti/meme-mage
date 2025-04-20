@@ -2,85 +2,87 @@
 
 ## Objective
 
-Modify the Instagram Reel scraping process, primarily within the Python script (`src/lib/meme-scraper/process_reels.py`), to directly populate the main `meme_templates` table with AI-generated analysis and mark them as unreviewed (`reviewed = false`). This involves removing the script's reliance on `db_manager.py` and the old processing flow, replacing it with calls to Node.js helper APIs and direct insertion into `meme_templates` using `supabase-py`. The Node.js API route (`/api/scrape-reels`) will continue to invoke this Python script.
+Modify the Instagram Reel scraping process to use a two-stage approach:
+1.  The Python script (`src/lib/meme-scraper/process_reels.py`) handles scraping, local file processing (download, crop, caption), and uploading the final video to Supabase storage. It then outputs structured JSON results (video URL, caption, etc.) or errors to standard output.
+2.  The Node.js API route (`/api/scrape-reels/route.ts`) invokes the Python script, parses its JSON output, and then orchestrates the remaining steps within Node.js: calling helper APIs (thumbnail, analysis, embedding) and inserting the final data into the `meme_templates` table with `reviewed = false` using the `supabaseAdmin` client.
+
+This approach centralizes the AI and database logic within the Node.js application while leveraging the existing Python script for the initial scraping and file handling.
 
 ## Related Files
 
-*   `src/lib/meme-scraper/process_reels.py` (Primary file to modify)
-*   `src/lib/meme-scraper/db_manager.py` (Usage to be removed from `process_reels.py`)
-*   `src/lib/meme-scraper/storage_uploader.py` (Existing usage for video upload remains)
-*   `src/app/api/scrape-reels/route.ts` (Invokes the Python script, may need env var updates)
-*   `src/app/api/analyze-video-template/route.ts` (To be called by the Python script)
-*   `src/app/api/embeddings/route.ts` (To be called by the Python script)
-*   `src/app/api/generate-thumbnail/route.ts` (To be called by the Python script)
-*   Python libraries: `requests`, `supabase-py` (install required)
+*   `src/lib/meme-scraper/process_reels.py` (Modified to output JSON)
+*   `src/lib/meme-scraper/storage_uploader.py` (Modified to use final bucket)
+*   `src/app/api/scrape-reels/route.ts` (Modified to parse Python output and perform API calls/DB insert)
+*   `src/app/api/analyze-video-template/route.ts` (Called by Node.js route, updated to parse name/analysis)
+*   `src/app/api/embeddings/route.ts` (Called by Node.js route)
+*   `src/app/api/generate-thumbnail/route.ts` (Called by Node.js route)
+*   `src/lib/utils/prompts.ts` (Modified analysis prompt)
+*   `src/lib/supabase/admin.ts` (Used by Node.js route for DB insert)
+*   `src/lib/utils/embeddings.ts` (Used by Node.js route)
+*   Python libraries: `json`, `shutil` (standard library), plus existing helpers.
 
 ## Database Changes Required (Manual / Migration)
 
 *   **Add `reviewed` column to `meme_templates` table:**
     *   `ALTER TABLE meme_templates ADD COLUMN reviewed BOOLEAN NULL DEFAULT NULL;`
-    *   Note: The default is `NULL`, but the script will insert `FALSE`. Existing templates can remain `NULL` or be backfilled to `TRUE` if considered reviewed.
+    *   Note: The default is `NULL`, but the Node.js route inserts `FALSE`.
 
-## Tasks (Modify `src/lib/meme-scraper/process_reels.py`)
+## Tasks (Refactored Implementation)
 
-1.  **Dependencies & Environment:** Add imports for `requests`, `supabase`, `os`, `shutil`. Ensure environment variables `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `NODE_API_BASE_URL` (e.g., `http://localhost:3000`) are available.
-2.  **Remove Old DB Logic:** Delete all calls to functions from `db_manager.py` (`insert_pending_reel`, `update_template_urls`, `update_template_error`, `update_template_status`).
-3.  **Initialize Supabase Client:** Create a Supabase client instance using `supabase.create_client()` with the URL and Service Role Key.
-4.  **Modify `process_url` Loop:** For each URL:
-    *   **Keep Existing Steps:** Download video (`downloader.py`), extract frame (`frame_extractor.py`), crop video (`video_cropper.py`), extract caption (`caption_extractor.py`). Retain `video_path`, `frame_path`, `cropped_video_path`, `caption_text`.
-    *   **Upload Cropped Video:** Use existing `storage_uploader.py` logic to upload `cropped_video_path` to Supabase Storage -> Get `finalVideoUrl`. Handle errors.
-    *   **Call Thumbnail API (Node.js):**
-        *   `POST` request using `requests` to `{NODE_API_BASE_URL}/api/generate-thumbnail` with JSON body `{"videoUrl": finalVideoUrl}`.
-        *   Parse response to get `thumbnailUrl`. Set to `None` on error.
-    *   **Call Analysis API (Node.js):**
-        *   `POST` request using `requests` to `{NODE_API_BASE_URL}/api/analyze-video-template` with JSON body `{"videoUrl": finalVideoUrl, "exampleCaption": caption_text}`.
-        *   Parse response to get `analysis` and `suggestedName`. Set placeholders on error.
-    *   **Call Embedding API (Node.js):**
-        *   `POST` request using `requests` to `{NODE_API_BASE_URL}/api/embeddings` with JSON body `{"text": analysis}`.
-        *   Parse response to get `embeddingVector`. Set to `None` on error.
-    *   **Insert into `meme_templates` Table:**
-        *   Use the initialized `supabase-py` client.
-        *   Construct the data dictionary (including `name`, `video_url`, `poster_url=thumbnailUrl`, `instructions=analysis`, `instagram_url`, `embedding=embeddingVector`, `reviewed=False`, `uploader_name='Scraper'`).
-        *   Call `supabase.table('meme_templates').insert(data_dict).execute()`.
-        *   Handle potential `supabase.errors.APIError` during insertion.
-    *   **Enhanced Cleanup:**
-        *   Remove temporary files: `os.remove(file_path)` for `video_path`, `frame_path`, `cropped_video_path` if they exist.
-        *   Remove potential temporary directories: `shutil.rmtree(dir_path, ignore_errors=True)` for likely paths like `./captions/` and `./frames/debug/` (relative to script execution).
-    *   Return `True` on success, `False` on failure.
-5.  **Script Output:** Ensure `main` function logs overall success/failure counts based on `process_url` results.
+**1. Python Script (`src/lib/meme-scraper/process_reels.py`):**
+    *   Remove imports and usage of `requests` and `supabase-py`.
+    *   Remove calls related to the old `db_manager.py`.
+    *   Keep logic for downloading, frame extraction, cropping, caption extraction.
+    *   Ensure `storage_uploader.py` uploads the final video to the `meme-templates` bucket.
+    *   On success for a URL, `print` a JSON string to `stdout` containing: `{ "success": true, "finalVideoUrl": "...", "captionText": "...", "instagramId": "...", "originalUrl": "..." }`.
+    *   On failure at any step for a URL, `print` a JSON string to `stdout` containing: `{ "success": false, "error": "...", "originalUrl": "..." }`.
+    *   Implement robust cleanup of temporary local files and directories (e.g., `./captions`, `./frames/debug`).
+
+**2. Node.js Route (`/api/scrape-reels/route.ts`):**
+    *   Spawn the modified Python script with the input URLs.
+    *   Capture `stdout` from the Python script.
+    *   On Python script completion (`on('close')`):
+        *   Check exit code. If non-zero, mark all URLs for this batch as failed.
+        *   If exit code is zero, parse each line of `stdout` expecting a JSON object.
+        *   For each successfully parsed JSON result from Python where `success` is `true`:
+            *   Extract `finalVideoUrl`, `captionText`, `instagramId`, `originalUrl`.
+            *   Call `/api/generate-thumbnail` using `fetch` to get `posterUrl`.
+            *   Call `/api/analyze-video-template` using `fetch` to get `analysis` and `suggestedName`.
+            *   Call `generateEmbedding(analysis)` utility function to get `embeddingVector`.
+            *   Use `supabaseAdmin` client to `insert` into `meme_templates` table with all collected data, setting `reviewed: false` and `uploader_name: 'Scraper'`. Handle potential insert errors.
+        *   For URLs that failed in Python (`success: false`) or during Node.js processing (API/DB errors), record the error status.
+    *   Return a final JSON response containing an array of results, detailing the status (`success`, `python_error`, `processing_error`, `db_error`) for each original input URL.
+
+**3. Supporting Files:**
+    *   Ensure `/api/analyze-video-template/route.ts` correctly parses the AI response based on the updated prompt (extracting `suggestedName` and `analysis`).
+    *   Ensure `src/lib/utils/prompts.ts` contains the updated `getGeminiVideoAnalysisPrompt` instructing the AI on name formatting and avoiding preamble.
 
 ## Key Considerations
 
-*   **API Base URL:** Pass `NODE_API_BASE_URL` via environment variable. `/api/scrape-reels/route.ts` may need modification to pass this when spawning the process.
-*   **Python Dependencies:** Ensure `requests` and `supabase-py` are installed (`pip install requests supabase-py`).
-*   **Error Handling:** Implement `try...except` blocks for file operations, API calls (`requests.exceptions.RequestException`), and Supabase insert (`supabase.errors.APIError`).
-*   **Helper Script Outputs:** Assume helper scripts (`downloader`, `cropper`, etc.) create outputs in the current working directory or known relative paths for cleanup.
-*   **Authentication/Authorization:** As before, Node.js endpoints should be protected if needed. `/api/scrape-reels` should be protected.
-*   **Performance:** As before.
+*   **JSON Parsing:** The Node.js route needs robust parsing of the JSON output from Python stdout.
+*   **Error Handling:** Implement comprehensive error handling in the Node.js route for Python script failures, JSON parsing errors, API call failures (`fetch`), embedding generation errors, and database insertion errors (`supabaseAdmin`).
+*   **Environment Variables:** Node.js environment needs Supabase and Google AI keys. Python script primarily needs Supabase keys for the `storage_uploader`.
+*   **Helper Script Outputs:** Python script relies on helper scripts (`downloader`, `cropper`, etc.) working correctly and cleaning up after themselves or placing files predictably for the main script's cleanup.
+*   **Authentication/Authorization:** Secure the `/api/scrape-reels` endpoint.
+*   **Performance:** Processing happens sequentially per URL within the Node.js route after the Python script finishes. Consider async processing (`Promise.all`) within the Node.js loop if performance for large batches becomes critical.
 
 ## Outcome
 
-*   Python script `process_reels.py` directly scrapes, analyzes (via API calls), and stores templates in `meme_templates` with `reviewed=False`.
-*   Removes dependency on the old `db_manager.py` flow.
-*   Includes API calls for thumbnail generation.
-*   Implements more robust cleanup of temporary files and directories.
+*   Scraping and initial file processing are handled by the Python script.
+*   AI analysis, embedding, thumbnail generation, and final database insertion are centralized in the Node.js `/api/scrape-reels` route.
+*   New templates are created in the `meme_templates` table with `reviewed = false`.
 *   The `unprocessed_templates` table is unused by this process.
+*   Reduced complexity by eliminating Python-to-Node.js API calls and Python database interactions.
 
 ---
 
 ## Change Log & Complexity Note
 
-*   **Shifted Focus:** Implementation focus moved from the Node.js `/api/scrape-reels` route to the Python script `src/lib/meme-scraper/process_reels.py`.
-*   **Added Thumbnail Step:** Explicitly added the requirement for the Python script to call `/api/generate-thumbnail`.
-*   **Corrected Table Name:** Updated `templates` to `meme_templates`.
-*   **Clarified `reviewed` Default:** Noted the SQL default is `NULL`, but the script inserts `False`.
-*   **Added API Calls:** Specified the HTTP POST requests the Python script needs to make to the Node.js backend for thumbnail, analysis, and embedding generation.
-*   **Python DB Client:** Specified the need for a Python Supabase client (`supabase-py`) for the database insertion step.
-*   **Detailed Python Logic:** Incorporated understanding from `process_reels.py` review, including removal of `db_manager.py` usage and specifying interaction with `storage_uploader.py`.
-*   **Enhanced Cleanup:** Added requirement to clean up potential directories like `captions` and `frames/debug`.
+*   **Pivoted Approach:** Shifted from modifying Python to call Node.js APIs back to a model where Python returns data to Node.js for processing, aligning with the original 'Future Refactoring' note.
+*   **Python Output:** Modified Python script to output structured JSON instead of performing API calls/DB inserts.
+*   **Node.js Logic:** Added logic to `/api/scrape-reels` to parse Python output, call helper APIs (thumbnail, analysis, embedding), and perform the final database insert.
+*   **Prompt/Parsing Update:** Modified the analysis prompt and corresponding API route (`/api/analyze-video-template`) to handle name extraction and remove preamble.
+*   **Corrected Bucket/Column Names:** Updated Python's `storage_uploader` to use the correct bucket and Node.js DB insert to use the correct column name (`original_source_url`).
+*   **Enhanced Cleanup:** Included robust cleanup in Python.
 
-**Complexity Note:** This approach, while leveraging the existing Python scraper, introduces complexity by requiring communication between the Python script and multiple Node.js API endpoints. This increases potential points of failure (network errors, API availability) and requires managing dependencies and environment configurations in both Python and Node.js contexts.
-
-**Future Refactoring:** If this inter-process communication becomes problematic or difficult to manage, a future refactoring could involve:
-    1.  Rewriting the scraping logic entirely within Node.js/TypeScript, eliminating the Python dependency.
-    2.  Modifying the Python script to only perform scraping and return structured data (video path/URL, caption) to the Node.js route, which would then handle the API calls and database insertion using native JS libraries. This retains the Python scraper but centralizes the processing logic. 
+**Complexity Note:** This refactored approach reduces cross-language dependencies during runtime compared to the intermediate plan. It centralizes complex logic (AI interactions, DB writes) in the main Node.js application, which is generally preferred for maintainability. The main complexity lies in managing the two-stage process (Python -> Node.js) and robustly handling potential errors at each stage. 
