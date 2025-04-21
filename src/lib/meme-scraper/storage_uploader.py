@@ -125,18 +125,11 @@ class StorageUploader:
             print(f"[StorageUploader Error] {error_msg}")
             return False, error_msg
 
-    def upload_thumbnail(self, file_path, unique_id):
-        """Upload a thumbnail with a standardized name"""
-        _, ext = os.path.splitext(file_path)
-        # Generate a unique name based on the unique ID and keep original extension
-        filename = f"thumbnail_{unique_id}{ext}"
-        print(f"Uploading thumbnail: {file_path} as {filename}")
-        return self.upload_file(file_path, 'unprocessed-thumbnails', filename)
-
     def upload_video(self, file_path, unique_id):
         """Upload a video with a standardized name"""
         _, ext = os.path.splitext(file_path)
          # Generate a unique name based on the unique ID and keep original extension
         filename = f"video_{unique_id}{ext}"
         print(f"Uploading video: {file_path} as {filename}")
-        return self.upload_file(file_path, 'unprocessed-videos', filename) 
+        # Upload to the final 'meme-templates' bucket
+        return self.upload_file(file_path, 'meme-templates', filename) 
