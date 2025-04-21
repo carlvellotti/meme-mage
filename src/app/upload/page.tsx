@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { TemplateUploader } from '@/app/components/TemplateUploader'
 import { ReelScraperForm } from '@/app/components/ReelScraperForm'
-import UnreviewedTemplatesTable from '../components/UnreviewedTemplatesTable'
+import UnreviewedTemplatesTable from '@/app/components/UnreviewedTemplatesTable'
 
 export default function UploadPage() {
   const [refreshCounter, setRefreshCounter] = useState(0);
