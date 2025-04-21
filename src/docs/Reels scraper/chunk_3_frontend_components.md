@@ -1,3 +1,5 @@
+> **DEPRECATION NOTE:** The components and workflow described in this document (`UnprocessedTemplatesTable`, selecting a template to finalize in `TemplateUploader`, and the associated DELETE API) have been **REPLACED** by the new AI-assisted template creation and review workflow implemented as part of the Gemini 2.5 Flash integration (see `src/docs/gemini 2.5 flash integration/`). Specifically, scraped templates are now directly analyzed by AI, inserted into the main `meme_templates` table with `reviewed=false`, and managed via the `UnreviewedTemplatesTable` component. This document is kept for historical reference only.
+
 # Reels Scraper Integration: Chunk 3 - Frontend Components (Completed)
 
 ## 1. Goals (Achieved)
