@@ -29,8 +29,9 @@ interface EditTemplateModalProps {
   template: MemeTemplate | null;
   initialName: string;          
   initialInstructions: string;
-  uploaderName?: string | null; // Added prop for uploader name
-  onSave: (templateId: string, newName: string, newInstructions: string) => Promise<void>; 
+  uploaderName?: string | null; 
+  onSaveChanges: (templateId: string, newName: string, newInstructions: string) => Promise<MemeTemplate | null>; // Updated prop name and signature
+  onSaveAndApprove: (templateId: string, newName: string, newInstructions: string) => Promise<void>; // Added prop
 }
 
 const EditTemplateModal: React.FC<EditTemplateModalProps> = ({ 
@@ -39,12 +40,13 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
   template,
   initialName,             
   initialInstructions,
-  uploaderName,             // Destructure prop
-  onSave 
+  uploaderName,             
+  onSaveChanges,       // Renamed prop
+  onSaveAndApprove   // Added prop
 }) => {
   const [modalName, setModalName] = useState(initialName);              
   const [modalInstructions, setModalInstructions] = useState(initialInstructions);
-  const [isSavingModal, setIsSavingModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // Generic saving state
 
   useEffect(() => {
     setModalName(initialName);
@@ -56,17 +58,29 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
 
   const hasChanges = modalName !== initialName || modalInstructions !== initialInstructions;
 
-  const handleModalSave = async () => {
-      if (!hasChanges) return; 
-      
-      setIsSavingModal(true);
+  const handleSaveChangesClick = async () => {
+      setIsSaving(true);
       try {
-          await onSave(template.id, modalName, modalInstructions);
-          onClose(); 
+          await onSaveChanges(template.id, modalName, modalInstructions);
+          onClose(); // Close modal on successful save
       } catch (error) {
-          console.error("Error saving from modal:", error);
+          console.error("Error saving changes:", error);
+          // Error toast handled in parent
       } finally {
-          setIsSavingModal(false);
+          setIsSaving(false);
+      }
+  };
+
+   const handleSaveAndApproveClick = async () => {
+      setIsSaving(true);
+      try {
+          await onSaveAndApprove(template.id, modalName, modalInstructions);
+          onClose(); // Close modal on successful save & approve
+      } catch (error) {
+          console.error("Error saving and approving:", error);
+           // Error toast handled in parent
+      } finally {
+          setIsSaving(false);
       }
   };
 
@@ -123,17 +137,26 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
         <div className="mt-auto flex justify-end space-x-3 flex-shrink-0 pt-4 border-t border-gray-700">
           <button
             onClick={onClose} 
-            disabled={isSavingModal}
+            disabled={isSaving}
             className="px-4 py-2 text-sm font-medium rounded-md text-gray-300 bg-gray-600 hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-gray-400 disabled:opacity-50"
           >
             Cancel
           </button>
+          {/* Save Changes Button */}
           <button
-            onClick={handleModalSave}
-            disabled={isSavingModal || !hasChanges} 
+            onClick={handleSaveChangesClick}
+            disabled={isSaving || !hasChanges} // Disable if saving or no changes
+            className="px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-wait"
+          >
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </button>
+           {/* Save & Approve Button */}
+          <button
+            onClick={handleSaveAndApproveClick}
+            disabled={isSaving} // Only disable if currently saving
             className="px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 disabled:opacity-50 disabled:cursor-wait"
           >
-            {isSavingModal ? 'Saving...' : 'Save & Approve'}
+            {isSaving ? 'Saving...' : 'Save & Approve'}
           </button>
         </div>
       </div>
@@ -270,9 +293,9 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
     // No longer setting inline edit state
   };
 
-  // Combined save handler for the modal - now saves AND approves
-  const handleSaveModal = async (templateId: string, newName: string, newInstructions: string): Promise<void> => {
-      console.log('Saving and approving changes from modal for:', templateId, { name: newName, instructions: newInstructions });
+  // Just saves Name/Instructions changes and updates item IN the list
+  const handleSaveChangesOnly = async (templateId: string, newName: string, newInstructions: string): Promise<MemeTemplate | null> => {
+      console.log('Saving changes only for:', templateId, { name: newName, instructions: newInstructions });
       const originalTemplate = unreviewedTemplates.find(t => t.id === templateId);
       const payload: Partial<MemeTemplate> = {};
       let changesMade = false;
@@ -286,31 +309,52 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
           changesMade = true;
       }
 
-      // We still need to handle the approval even if no text changes were made
-      // We wrap the core logic in a promise to handle async in the modal
+      if (!changesMade) {
+          toast('No changes detected.');
+          return Promise.resolve(originalTemplate || null); // Resolve with original if no changes
+      }
+
+      // Wrap in promise for consistency
       return new Promise(async (resolve, reject) => {
           try {
-              // Step 1: Save Name/Instructions (if changed)
-              if (changesMade) {
-                  console.log('Payload for save:', payload);
-                  const saveResponse = await fetch(`/api/templates/${templateId}`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(payload), 
-                  });
+              console.log('Payload for save:', payload);
+              const saveResponse = await fetch(`/api/templates/${templateId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload),
+              });
 
-                  if (!saveResponse.ok) {
-                      const errorData = await saveResponse.json();
-                      throw new Error(errorData.error || `Failed to save changes (Status: ${saveResponse.status})`);
-                  }
-                  console.log('Name/Instructions save successful.');
-                  // Don't update local state yet, wait for approval step
-              } else {
-                   console.log('No name/instruction changes detected, proceeding to approve.');
+              if (!saveResponse.ok) {
+                  const errorData = await saveResponse.json();
+                  throw new Error(errorData.error || `Failed to save changes (Status: ${saveResponse.status})`);
               }
 
-              // Step 2: Approve the template
-              console.log('Approving template:', templateId);
+              const savedTemplate: MemeTemplate = await saveResponse.json(); // Get updated template
+
+              // Update local state IN PLACE
+              setUnreviewedTemplates(prev =>
+                  prev.map(t => t.id === templateId ? savedTemplate : t) // Update the item
+              );
+
+              toast.success('Template changes saved!');
+              resolve(savedTemplate); // Resolve with the saved template
+          } catch (err: any) {
+              console.error('Save changes failed:', err);
+              toast.error(`Save failed: ${err.message}`);
+              reject(err);
+          }
+      });
+  };
+
+  // Just approves the template and removes from list
+  const handleApproveOnly = async (templateId: string): Promise<void> => {
+      const template = unreviewedTemplates.find(t => t.id === templateId);
+      if (!template) return Promise.reject(new Error("Template not found locally")); // Should not happen
+
+      console.log('Approving template:', templateId);
+
+      return new Promise(async (resolve, reject) => {
+          try {
               const approveResponse = await fetch(`/api/templates/${templateId}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
@@ -323,18 +367,37 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
               }
               console.log('Approval successful.');
 
-              // Step 3: Update local state (remove the template)
-              setUnreviewedTemplates(prev =>
-                  prev.filter(t => t.id !== templateId)
-              );
-
-              toast.success('Template saved and approved!');
-              resolve(); // Resolve the promise on success of BOTH steps
+              // Remove from local state
+              setUnreviewedTemplates(prev => prev.filter(t => t.id !== templateId));
+              toast.success(`Template "${template.name}" approved!`);
+              resolve();
           } catch (err: any) {
-              console.error('Modal save/approve failed:', err);
-              toast.error(`Operation failed: ${err.message}`);
-              reject(err); // Reject the promise on error
+              console.error('Approval failed:', err);
+              toast.error(`Approval failed: ${err.message}`);
+              reject(err);
           }
+      });
+  };
+
+  // Saves changes (if any) AND THEN approves/removes
+  const handleSaveAndApprove = async (templateId: string, newName: string, newInstructions: string): Promise<void> => {
+      console.log('Attempting Save & Approve for:', templateId);
+      return new Promise(async (resolve, reject) => {
+        try {
+            // Step 1: Attempt to save changes (this handles the "no changes" case internally)
+            await handleSaveChangesOnly(templateId, newName, newInstructions);
+            // If save succeeds (or no changes were needed)...
+
+            // Step 2: Attempt to approve
+            await handleApproveOnly(templateId);
+
+            // If both steps complete without throwing error...
+            resolve(); // Overall success
+        } catch (err) {
+            // Error toast is shown in individual handlers
+            console.error('Save & Approve sequence failed:', err);
+            reject(err); // Reject the overall promise
+        }
       });
   };
 
@@ -552,7 +615,7 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
                                 Edit
                                 </button>
                                 <button
-                                onClick={() => handleApprove(template.id)}
+                                onClick={() => handleApproveOnly(template.id)} // Use handleApproveOnly for the standalone button
                                 className="px-3 py-1 text-xs font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-emerald-500"
                                 >
                                 Approve
@@ -621,7 +684,8 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
             initialName={editModalInitialName}
             initialInstructions={editModalInitialInstructions}
             uploaderName={currentEditingTemplate?.uploader_name}
-            onSave={handleSaveModal} 
+            onSaveChanges={handleSaveChangesOnly} // Pass Save Changes handler
+            onSaveAndApprove={handleSaveAndApprove} // Pass Save & Approve handler
         />
     </div>
   );
