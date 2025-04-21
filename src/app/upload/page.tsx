@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { TemplateUploader } from '@/app/components/TemplateUploader'
 import { ReelScraperForm } from '@/app/components/ReelScraperForm'
-import UnreviewedTemplatesTable from '@/app/components/UnreviewedTemplatesTable'
+import ReviewTemplatesTable from '@/app/components/ReviewTemplatesTable'
 
 export default function UploadPage() {
   const [refreshCounter, setRefreshCounter] = useState(0);
@@ -27,7 +27,7 @@ export default function UploadPage() {
         </div>
 
         <div className="mb-12">
-          <UnreviewedTemplatesTable 
+          <ReviewTemplatesTable 
             className="bg-gray-800 p-6 rounded-lg border border-gray-700" 
             refreshTrigger={refreshCounter} 
           />
