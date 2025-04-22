@@ -1,4 +1,6 @@
-import 'dotenv/config'; // Load .env variables
+// import 'dotenv/config'; // Load .env variables - Replaced with explicit config
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' }); // Explicitly load .env.local
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateEmbedding } from '@/lib/utils/embeddings';
 import { getGeminiVideoAnalysisPrompt } from '@/lib/utils/prompts';
@@ -34,10 +36,6 @@ async function reanalyzeAllUnreviewed() {
     console.error('Error: GOOGLE_API_KEY environment variable not set.');
     return;
   }
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      console.error('Error: Supabase environment variables (URL, Service Role Key) not set.');
-      return;
-  }
 
   // Initialize Supabase Admin Client (already done via import)
 
@@ -53,7 +51,7 @@ async function reanalyzeAllUnreviewed() {
   });
 
   // Fetch unreviewed templates
-  console.log("Fetching unreviewed templates from Supabase...");
+  console.log("Fetching all unreviewed templates from Supabase...");
   const { data: templates, error: fetchError } = await supabaseAdmin
     .from('meme_templates')
     .select('id, video_url, instructions') // Select only needed fields

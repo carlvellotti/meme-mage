@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast'; // Assuming react-hot-toast is installed and configured
+import VideoPreviewCropModal from './VideoPreviewCropModal'; // Import the new modal
 
 // Assuming a type definition like this exists in src/lib/supabase/types.ts
 // Need to import the actual type when available
@@ -172,18 +173,22 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
     refreshTrigger = 0 
 }) => {
   const [unreviewedTemplates, setUnreviewedTemplates] = useState<MemeTemplate[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true); // For initial load / refresh
-  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false); // For loading more
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [hasMore, setHasMore] = useState<boolean>(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalVideoUrl, setModalVideoUrl] = useState<string | null>(null);
+  
+  // State for Edit Modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentEditingTemplate, setCurrentEditingTemplate] = useState<MemeTemplate | null>(null);
   const [editModalInitialName, setEditModalInitialName] = useState('');
   const [editModalInitialInstructions, setEditModalInitialInstructions] = useState('');
+
+  // State for Preview/Crop Modal
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [currentPreviewTemplate, setCurrentPreviewTemplate] = useState<MemeTemplate | null>(null);
 
   const fetchUnreviewedTemplates = async (pageToFetch = 1, loadMore = false) => {
     console.log(`Fetching unreviewed templates: page=${pageToFetch}, loadMore=${loadMore}`);
@@ -285,12 +290,10 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
   };
 
   const handleEditClick = (template: MemeTemplate) => {
-    // Set state for edit modal
     setCurrentEditingTemplate(template);
     setEditModalInitialName(template.name);
     setEditModalInitialInstructions(template.instructions || '');
     setIsEditModalOpen(true);
-    // No longer setting inline edit state
   };
 
   // Just saves Name/Instructions changes and updates item IN the list
@@ -400,35 +403,7 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
         }
       });
   };
-
-  // ... existing handleApprove and handleDelete logic ...
-  const handleApprove = async (templateId: string) => {
-    const template = unreviewedTemplates.find(t => t.id === templateId);
-    if (!template) return;
-
-    console.log('Approving:', templateId);
-    
-    try {
-      const response = await fetch(`/api/templates/${templateId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reviewed: true }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to approve template (Status: ${response.status})`);
-      }
-
-      // Remove from local state
-      setUnreviewedTemplates(prev => prev.filter(t => t.id !== templateId));
-      toast.success(`Template "${template.name}" approved!`);
-    } catch (err: any) {
-      console.error('Approval failed:', err);
-      toast.error(`Approval failed: ${err.message}`);
-    }
-  };
-
+  
   const handleDelete = async (templateId: string) => {
     const template = unreviewedTemplates.find(t => t.id === templateId);
     if (!template) return;
@@ -460,19 +435,39 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
     }
   };
 
-  // ... existing modal handlers (handlePreviewClick, closeModal) ...
-  // Open modal handler
-  const handlePreviewClick = (videoUrl: string | null) => {
-    if (videoUrl) {
-      setModalVideoUrl(videoUrl);
-      setIsModalOpen(true);
+  // --- Handlers for Preview/Crop Modal --- 
+  const handlePreviewClick = (template: MemeTemplate | null) => {
+    if (template && template.video_url) {
+      setCurrentPreviewTemplate(template);
+      setIsPreviewModalOpen(true);
+    } else {
+        toast.error('Cannot preview - video URL is missing.');
     }
   };
 
-  // Close modal handler
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setModalVideoUrl(null);
+  const closePreviewModal = () => {
+    setIsPreviewModalOpen(false);
+    setCurrentPreviewTemplate(null);
+  };
+
+  // --- Updated Crop Complete Handler --- 
+  const handleCropComplete = (templateId: string, updatedUrl?: string) => {
+      console.log(`Crop completed for template ${templateId}.`);
+      if (updatedUrl) {
+          console.log(`Updating URL in local state to: ${updatedUrl}`);
+          setUnreviewedTemplates(prevTemplates => 
+              prevTemplates.map(template => 
+                  template.id === templateId 
+                      ? { ...template, video_url: updatedUrl } // Update the URL
+                      : template
+              )
+          );
+          toast.success('Template preview updated locally.'); // Optional feedback
+      } else {
+          // Fallback if URL wasn't passed back - refresh the whole list
+          console.warn('Updated URL not provided after crop, refreshing full list as fallback.');
+          handleRefreshClick(); 
+      }
   };
 
   if (isLoading) {
@@ -556,7 +551,7 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
                        <td className="px-4 py-2 align-top">
                           <div 
                               className="w-24 h-16 bg-gray-700 rounded flex items-center justify-center text-gray-400 text-xs cursor-pointer border border-gray-600 hover:opacity-80 transition-opacity"
-                              onClick={() => handlePreviewClick(template.video_url)} 
+                              onClick={() => handlePreviewClick(template)} // Pass the whole template
                               title="Click to preview video"
                           >
                           {template.poster_url ? (
@@ -648,45 +643,25 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
             </div>
         )}
 
-      {/* Video Preview Modal */} 
-       {isModalOpen && modalVideoUrl && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300"
-          onClick={closeModal}
-        >
-          <div 
-            className="bg-gray-900 p-4 rounded-lg max-w-3xl w-full mx-4 relative shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button 
-              onClick={closeModal}
-              className="absolute top-2 right-2 text-gray-400 hover:text-white text-2xl leading-none"
-              aria-label="Close video preview"
-            >
-              &times;
-            </button>
-            <video 
-              src={modalVideoUrl} 
-              controls 
-              autoPlay
-              className="w-full max-h-[80vh] rounded"
-            >
-              Your browser does not support the video tag.
-            </video>
-          </div>
-        </div>
-      )}
-       {/* Edit Template Modal */} 
-        <EditTemplateModal 
-            isOpen={isEditModalOpen}
-            onClose={() => setIsEditModalOpen(false)}
-            template={currentEditingTemplate} 
-            initialName={editModalInitialName}
-            initialInstructions={editModalInitialInstructions}
-            uploaderName={currentEditingTemplate?.uploader_name}
-            onSaveChanges={handleSaveChangesOnly} // Pass Save Changes handler
-            onSaveAndApprove={handleSaveAndApprove} // Pass Save & Approve handler
-        />
+      {/* Edit Template Modal */} 
+      <EditTemplateModal 
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          template={currentEditingTemplate} 
+          initialName={editModalInitialName}
+          initialInstructions={editModalInitialInstructions}
+          uploaderName={currentEditingTemplate?.uploader_name}
+          onSaveChanges={handleSaveChangesOnly}
+          onSaveAndApprove={handleSaveAndApprove}
+      />
+
+      {/* New Preview/Crop Modal */} 
+      <VideoPreviewCropModal 
+          isOpen={isPreviewModalOpen}
+          onClose={closePreviewModal}
+          template={currentPreviewTemplate}
+          onCropComplete={handleCropComplete}
+      />
     </div>
   );
 };

@@ -1,0 +1,92 @@
+# Documentation: VideoPreviewCropModal Component
+
+## Overview
+
+The `VideoPreviewCropModal` component provides a user interface for previewing video templates and allowing users to interactively crop them. It operates as a modal dialog.
+
+## File Location
+
+`src/app/components/VideoPreviewCropModal.tsx`
+
+## Core Functionality
+
+1.  **Modal Display:**
+    *   Controlled by the `isOpen` prop.
+    *   Receives the `template` object (containing `id`, `name`, `video_url`) and callback functions (`onClose`, `onCropComplete`) as props.
+
+2.  **Video Preview:**
+    *   Initially displays the video specified by `template.video_url` using a standard HTML `<video>` element with controls enabled.
+    *   Uses `preload="metadata"` and `crossOrigin="anonymous"` attributes to enable preview display and allow frame capture for cropping.
+    *   Attempts to autoplay the video once with sound when its metadata loads, subject to browser autoplay policies.
+
+3.  **Cropping Mode:**
+    *   Activated by clicking the "Crop Video" button.
+    *   Pauses the video and captures the current frame onto a hidden `<canvas>`.
+    *   Displays the captured frame (`imageSrc`) within the `ReactCrop` component.
+    *   Allows the user to draw and adjust a rectangular crop selection.
+
+4.  **Saving the Crop:**
+    *   Triggered by the "Save Crop" button.
+    *   Validates that a crop selection exists.
+    *   Enters a processing state (`isProcessing`).
+    *   Translates the pixel-based crop coordinates (from the displayed image size within `ReactCrop`) to coordinates relative to the video's natural dimensions (`videoDimensions`). This scaling uses `imageElement.naturalWidth/Height`.
+    *   Sends the final calculated crop coordinates (`{ x, y, width, height }`) to the backend API endpoint: `POST /api/templates/${template.id}/crop`.
+    *   **On API Success:**
+        *   Displays a success toast message.
+        *   Calls the `onCropComplete` prop with the template ID and the `updatedVideoUrl` received from the API response.
+        *   Updates the internal `currentVideoUrl` state with the new URL.
+        *   Switches back to the video preview mode (`setIsCropping(false)`).
+        *   Resets cropping state (`imageSrc`, `crop`).
+        *   **Crucially, the modal remains open**, now displaying the newly cropped video.
+    *   **On API Failure:** Displays an error toast message.
+    *   Exits the processing state.
+
+5.  **Canceling Crop:**
+    *   The "Cancel Crop" button (visible in cropping mode) reverts the UI back to the video preview mode without saving changes.
+
+6.  **Closing the Modal:**
+    *   The "Close" button or clicking the overlay background triggers the `onClose` prop to close the modal.
+
+## State Management
+
+*   **Props:** `isOpen`, `onClose`, `template`, `onCropComplete`.
+*   **Internal State:**
+    *   `isCropping` (boolean): Controls the UI mode (preview vs. crop).
+    *   `imageSrc` (string | null): Base64 data URL of the captured video frame used by `ReactCrop`.
+    *   `crop` (Crop | undefined): The current crop selection object managed by `ReactCrop`.
+    *   `videoDimensions` ({ width, height } | null): Stores the natural pixel dimensions of the video, loaded via `onLoadedMetadata`.
+    *   `isProcessing` (boolean): Loading state indicator, primarily for the "Save Crop" API call. Disables relevant buttons.
+    *   `currentVideoUrl` (string | null): The URL of the video source currently being displayed by the `<video>` element. Initialized with `template.video_url`, updated after a successful crop.
+*   **Refs:**
+    *   `videoRef`: Reference to the HTML `<video>` element.
+    *   `canvasRef`: Reference to the hidden `<canvas>` used for frame capture.
+    *   `imgRef`: Reference to the `<img>` element rendered inside `ReactCrop`. Used for coordinate scaling.
+    *   `hasAutoPlayedRef`: Boolean ref to ensure the autoplay attempt only happens once per video load.
+
+## Key Implementation Details & Fixes Addressed
+
+*   **Mouse Lag:** Significant lag was observed upon modal opening. Initial attempts involved delaying video load, but the final solution involved:
+    *   Using `preload="metadata"` (instead of `auto` or `none` initially tested).
+    *   Ensuring `crossOrigin="anonymous"` was set.
+    *   The lag seemed tied to the browser's initial resource allocation for the video element and its controls. Removing default controls temporarily fixed it, suggesting they contributed overhead. Adding `preload="metadata"` and `crossOrigin` allowed controls to be added back without lag reappearing in testing.
+*   **Tainted Canvas Security Error:** Cropping failed because drawing a cross-origin video onto a canvas taints it. Fixed by:
+    *   Adding `crossOrigin="anonymous"` attribute to the `<video>` element.
+    *   **Requirement:** The server hosting the video (e.g., Supabase storage) **must** be configured with appropriate CORS headers (e.g., `Access-Control-Allow-Origin`).
+*   **Keeping Modal Open Post-Crop:** Changed the success path in `handleSaveCrop` to update `currentVideoUrl`, reset relevant states, and switch `isCropping` to `false`, explicitly *not* calling `onClose()`. The `key={currentVideoUrl}` prop was added to the `<video>` element to ensure React treats it as a new element when the source changes, forcing metadata and preview frame reload.
+*   **Autoplay with Sound:** Removed the `muted` attribute. Implemented logic in `handleVideoLoadedMetadata` using `hasAutoPlayedRef` to attempt `videoRef.current.play()` only once when metadata loads. Acknowledged that browser autoplay restrictions might prevent playback with sound without prior user interaction.
+*   **UI/Layout Adjustments:**
+    *   `react-image-crop` and its container had max-height/width constraints adjusted (`max-h-[70vh]`, `max-w-full`) to prevent overflow and scrollbars during cropping.
+    *   Explicitly disabled `overflow-y-auto` on the main content container when `isCropping` is true.
+    *   Addressed a visual gap where the dark overlay background didn't reach the top screen edge. The final fix involved using two separate `fixed inset-0` divs: one purely for the `bg-black bg-opacity-75` overlay and another sibling div using flexbox for centering the modal content box. Explicit `top:0` styles were added for robustness.
+
+## Dependencies
+
+*   `react`
+*   `react-hot-toast`
+*   `react-image-crop`
+
+## API Interaction
+
+*   **Endpoint:** `POST /api/templates/[templateId]/crop`
+*   **Request Body:** `application/json` - `{ "x": number, "y": number, "width": number, "height": number }` (coordinates relative to natural video dimensions)
+*   **Expected Success Response:** `application/json` - `{ "updatedVideoUrl": string }` 
