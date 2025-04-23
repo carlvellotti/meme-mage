@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin'; // Use the admin client
 
 const DEFAULT_LIMIT = 12; // Default number of templates per page
+const DEFAULT_REVIEW_LIMIT = 10; // Limit for unreviewed templates pagination
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,34 +18,68 @@ export async function GET(request: NextRequest) {
     // }
 
     if (reviewedParam === 'false') {
-        // --- Fetch ONLY Unreviewed Templates ---
-        console.log('Fetching unreviewed templates...');
-        const { data, error } = await supabaseAdmin
-          .from('meme_templates')
-          .select('*') // Select all columns for review
-          .neq('reviewed', true) // Filter where reviewed is not TRUE (catches FALSE and NULL)
-          .order('created_at', { ascending: true }); // Order oldest first
+        // --- Fetch ONLY Unreviewed Templates with Pagination ---
+        const pageParam = searchParams.get('page');
+        const limitParam = searchParams.get('limit');
 
-        if (error) {
-          console.error('Error fetching unreviewed templates:', error);
-          throw error;
+        const page = pageParam ? parseInt(pageParam, 10) : 1;
+        const limit = limitParam ? parseInt(limitParam, 10) : DEFAULT_REVIEW_LIMIT;
+
+        if (isNaN(page) || page < 1) {
+            return NextResponse.json({ error: 'Invalid page parameter' }, { status: 400 });
+        }
+        if (isNaN(limit) || limit < 1) {
+            return NextResponse.json({ error: 'Invalid limit parameter' }, { status: 400 });
         }
 
-        // Return the array directly, not nested in an object
-        const response = NextResponse.json(data || []); 
-        // Add headers to prevent caching
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+
+        console.log(`Fetching unreviewed templates: page=${page}, limit=${limit}, range=[${from}-${to}]`);
+
+        // Fetch templates for the page
+        const { data: templates, error: fetchError } = await supabaseAdmin
+          .from('meme_templates')
+          .select('*')
+          .neq('reviewed', true)
+          .order('created_at', { ascending: true })
+          .range(from, to);
+
+        if (fetchError) {
+          console.error('Error fetching unreviewed templates page:', fetchError);
+          throw fetchError;
+        }
+
+        // Fetch total count of unreviewed templates
+        const { count, error: countError } = await supabaseAdmin
+            .from('meme_templates')
+            .select('*', { count: 'exact', head: true })
+            .neq('reviewed', true);
+
+         if (countError) {
+            console.error('Error fetching unreviewed template count:', countError);
+            // Return data without count if count fails, but log error
+         }
+
+        // Return object with templates and total count
+        const response = NextResponse.json({ 
+            templates: templates || [], 
+            totalCount: count ?? 0
+        }); 
         response.headers.set('Cache-Control', 'no-store, max-age=0');
         response.headers.set('Pragma', 'no-cache');
         response.headers.set('Expires', '0');
         return response;
 
     } else {
-        // --- Original Logic: Fetch All Templates with Pagination ---
+        // --- Original Logic: Fetch All Reviewed Templates with Pagination ---
+        // (Keep existing logic for fetching reviewed templates here)
         const pageParam = searchParams.get('page');
         const limitParam = searchParams.get('limit');
         
         const page = pageParam ? parseInt(pageParam, 10) : 1;
-        const limit = limitParam ? parseInt(limitParam, 10) : DEFAULT_LIMIT;
+        // Use a different default limit if needed for the main browser
+        const limit = limitParam ? parseInt(limitParam, 10) : DEFAULT_LIMIT; 
         
         if (isNaN(page) || page < 1) {
             return NextResponse.json({ error: 'Invalid page parameter' }, { status: 400 });
@@ -55,41 +90,33 @@ export async function GET(request: NextRequest) {
 
         const from = (page - 1) * limit;
         const to = from + limit - 1;
-        // --- End Pagination Parameters ---
 
-        console.log(`Fetching all templates: page=${page}, limit=${limit}, range=[${from}-${to}]`);
+        console.log(`Fetching reviewed templates: page=${page}, limit=${limit}, range=[${from}-${to}]`);
         
-        // --- Fetch Templates for the Page ---
-        const { data: templates, error: fetchError } = await supabaseAdmin // Use supabaseAdmin
+        const { data: templates, error: fetchError } = await supabaseAdmin
           .from('meme_templates')
-          .select('*') // Selects all columns, including poster_url
+          .select('*')
+          .eq('reviewed', true) // Ensure we only fetch reviewed=true here
           .order('created_at', { ascending: false })
-          .range(from, to); // Apply pagination range
+          .range(from, to); 
 
         if (fetchError) {
-            console.error('Error fetching templates page:', fetchError);
-            throw fetchError; // Throw error to be caught by outer catch block
+            console.error('Error fetching reviewed templates page:', fetchError);
+            throw fetchError;
         }
-        // --- End Fetch Templates ---
         
-        // --- Fetch Total Count --- 
-        // We run this separately to get the total count efficiently
-        const { count, error: countError } = await supabaseAdmin // Use supabaseAdmin
+        const { count, error: countError } = await supabaseAdmin
           .from('meme_templates')
-          .select('*' , { count: 'exact', head: true }); // Get only count
+          .select('*' , { count: 'exact', head: true })
+          .eq('reviewed', true); // Ensure count is also for reviewed=true
 
         if (countError) {
-          console.error('Error fetching template count:', countError);
-          // Decide if you want to fail the request or return data without count
-          // For robustness, let's return what we have but log the error
-          // throw countError; 
+          console.error('Error fetching reviewed template count:', countError);
         }
-        // --- End Fetch Total Count ---
 
-        // Add headers to prevent caching
         const response = NextResponse.json({ 
-            templates: templates || [], // Return empty array if data is null
-            totalCount: count ?? 0 // Return 0 if count is null
+            templates: templates || [], 
+            totalCount: count ?? 0 
         });
         response.headers.set('Cache-Control', 'no-store, max-age=0');
         response.headers.set('Pragma', 'no-cache');

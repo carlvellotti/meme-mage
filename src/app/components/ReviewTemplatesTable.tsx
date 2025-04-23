@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast'; // Assuming react-hot-toast is installed and configured
+import VideoPreviewCropModal from './VideoPreviewCropModal'; // Import the new modal
 
 // Assuming a type definition like this exists in src/lib/supabase/types.ts
 // Need to import the actual type when available
@@ -13,6 +14,7 @@ interface MemeTemplate {
   poster_url?: string | null;
   original_source_url?: string | null;
   reviewed?: boolean | null;
+  uploader_name?: string | null; // Added uploader name field
   // Add other relevant fields as needed from the actual type
 }
 
@@ -22,71 +24,87 @@ interface UnreviewedTemplatesTableProps {
 }
 
 // --- Edit Template Modal Component ---
-interface EditTemplateModalProps { // Renamed
+interface EditTemplateModalProps { 
   isOpen: boolean;
   onClose: () => void;
   template: MemeTemplate | null;
-  initialName: string;          // Added
+  initialName: string;          
   initialInstructions: string;
-  onSave: (templateId: string, newName: string, newInstructions: string) => Promise<void>; // Updated signature
+  uploaderName?: string | null; 
+  onSaveChanges: (templateId: string, newName: string, newInstructions: string) => Promise<MemeTemplate | null>; // Updated prop name and signature
+  onSaveAndApprove: (templateId: string, newName: string, newInstructions: string) => Promise<void>; // Added prop
 }
 
-const EditTemplateModal: React.FC<EditTemplateModalProps> = ({ // Renamed
+const EditTemplateModal: React.FC<EditTemplateModalProps> = ({ 
   isOpen,
   onClose,
   template,
-  initialName,              // Added
+  initialName,             
   initialInstructions,
-  onSave 
+  uploaderName,             
+  onSaveChanges,       // Renamed prop
+  onSaveAndApprove   // Added prop
 }) => {
-  const [modalName, setModalName] = useState(initialName);              // Added
+  const [modalName, setModalName] = useState(initialName);              
   const [modalInstructions, setModalInstructions] = useState(initialInstructions);
-  const [isSavingModal, setIsSavingModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // Generic saving state
 
-  // Update state if initial values change (when opening for a different template)
   useEffect(() => {
     setModalName(initialName);
     setModalInstructions(initialInstructions);
   }, [initialName, initialInstructions]);
 
+
   if (!isOpen || !template) return null;
 
   const hasChanges = modalName !== initialName || modalInstructions !== initialInstructions;
 
-  const handleModalSave = async () => {
-      if (!hasChanges) return; // Should not happen if button is disabled, but double-check
-      
-      setIsSavingModal(true);
+  const handleSaveChangesClick = async () => {
+      setIsSaving(true);
       try {
-          // Pass both potentially updated values to the save handler
-          await onSave(template.id, modalName, modalInstructions);
+          await onSaveChanges(template.id, modalName, modalInstructions);
           onClose(); // Close modal on successful save
       } catch (error) {
-          // Error toast is handled in the parent's onSave function
-          console.error("Error saving from modal:", error);
+          console.error("Error saving changes:", error);
+          // Error toast handled in parent
       } finally {
-          setIsSavingModal(false);
+          setIsSaving(false);
       }
   };
 
-  // Close modal when clicking the background overlay
+   const handleSaveAndApproveClick = async () => {
+      setIsSaving(true);
+      try {
+          await onSaveAndApprove(template.id, modalName, modalInstructions);
+          onClose(); // Close modal on successful save & approve
+      } catch (error) {
+          console.error("Error saving and approving:", error);
+           // Error toast handled in parent
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
       if (e.target === e.currentTarget) {
           onClose();
       }
   };
 
+
   return (
-    // Added overlay click handler
     <div 
         className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300 px-4 py-8"
         onClick={handleOverlayClick} 
     >
-      {/* Increased max-width and added height constraints */}
       <div className="bg-gray-800 p-6 rounded-lg max-w-4xl w-full mx-auto relative shadow-xl border border-gray-700 flex flex-col max-h-[85vh]">
-        <h3 className="text-lg font-semibold text-white mb-4 flex-shrink-0">Edit Template: {initialName}</h3>
+        <h3 className="text-lg font-semibold text-white mb-1 flex-shrink-0">Edit Template: {initialName}</h3>
+        {/* Display Uploader Name if available */} 
+        {uploaderName && (
+            <p className="text-xs text-gray-400 mb-4 flex-shrink-0">Uploader: {uploaderName}</p>
+        )}
         
-        {/* Added Name input field */}
+        {/* Name input field */}
         <div className="mb-4 flex-shrink-0">
             <label htmlFor="modal-template-name" className="block text-sm font-medium text-gray-300 mb-1">
                 Template Name
@@ -101,7 +119,7 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({ // Renamed
             />
         </div>
 
-        {/* Instructions Textarea - Now takes remaining space */}
+        {/* Instructions Textarea */}
          <div className="mb-4 flex-grow flex flex-col">
             <label htmlFor="modal-template-instructions" className="block text-sm font-medium text-gray-300 mb-1">
                 Instructions
@@ -112,7 +130,7 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({ // Renamed
                 onChange={(e) => setModalInstructions(e.target.value)}
                 className="w-full p-3 border border-gray-600 bg-gray-700 text-white rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm resize-y flex-grow"
                 placeholder="Enter detailed instructions..."
-                style={{minHeight: '450px'}} // Increased minHeight significantly
+                style={{minHeight: '450px'}} 
             />
         </div>
 
@@ -120,17 +138,26 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({ // Renamed
         <div className="mt-auto flex justify-end space-x-3 flex-shrink-0 pt-4 border-t border-gray-700">
           <button
             onClick={onClose} 
-            disabled={isSavingModal}
+            disabled={isSaving}
             className="px-4 py-2 text-sm font-medium rounded-md text-gray-300 bg-gray-600 hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-gray-400 disabled:opacity-50"
           >
             Cancel
           </button>
+          {/* Save Changes Button */}
           <button
-            onClick={handleModalSave}
-            disabled={isSavingModal || !hasChanges} // Disable if no changes or saving
+            onClick={handleSaveChangesClick}
+            disabled={isSaving || !hasChanges} // Disable if saving or no changes
+            className="px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-wait"
+          >
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </button>
+           {/* Save & Approve Button */}
+          <button
+            onClick={handleSaveAndApproveClick}
+            disabled={isSaving} // Only disable if currently saving
             className="px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 disabled:opacity-50 disabled:cursor-wait"
           >
-            {isSavingModal ? 'Saving...' : 'Save Changes'}
+            {isSaving ? 'Saving...' : 'Save & Approve'}
           </button>
         </div>
       </div>
@@ -139,26 +166,46 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({ // Renamed
 };
 // --- End Edit Template Modal Component ---
 
+const REVIEW_LIMIT = 10; // Items per page for review table
+
 const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({ 
     className,
-    refreshTrigger = 0 // Default value
+    refreshTrigger = 0 
 }) => {
   const [unreviewedTemplates, setUnreviewedTemplates] = useState<MemeTemplate[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false); // For video preview
-  const [modalVideoUrl, setModalVideoUrl] = useState<string | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false); 
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  
+  // State for Edit Modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentEditingTemplate, setCurrentEditingTemplate] = useState<MemeTemplate | null>(null);
-  const [editModalInitialName, setEditModalInitialName] = useState(''); 
-  const [editModalInitialInstructions, setEditModalInitialInstructions] = useState(''); 
+  const [editModalInitialName, setEditModalInitialName] = useState('');
+  const [editModalInitialInstructions, setEditModalInitialInstructions] = useState('');
 
-  const fetchUnreviewedTemplates = async () => {
-    console.log('Fetching/Refreshing unreviewed templates...');
-    setIsLoading(true);
+  // State for Preview/Crop Modal
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [currentPreviewTemplate, setCurrentPreviewTemplate] = useState<MemeTemplate | null>(null);
+
+  const fetchUnreviewedTemplates = async (pageToFetch = 1, loadMore = false) => {
+    console.log(`Fetching unreviewed templates: page=${pageToFetch}, loadMore=${loadMore}`);
+    
+    if (loadMore) {
+        setIsLoadingMore(true);
+    } else {
+        setIsLoading(true);
+        setUnreviewedTemplates([]); // Clear existing on refresh/initial
+        setCurrentPage(1); // Reset page on refresh/initial
+    }
     setError(null);
+
     try {
-      const response = await fetch('/api/templates?reviewed=false');
+      // Construct URL with pagination params
+      const apiUrl = `/api/templates?reviewed=false&page=${pageToFetch}&limit=${REVIEW_LIMIT}`;
+      const response = await fetch(apiUrl);
 
       if (!response.ok) {
         let errorMsg = `HTTP error! status: ${response.status}`;
@@ -171,136 +218,192 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
         throw new Error(errorMsg);
       }
 
+      // Expect the object { templates: [], totalCount: number }
       const data = await response.json();
       console.log('API Response Data for Unreviewed Templates:', data);
 
-      if (Array.isArray(data)) {
-        setUnreviewedTemplates(data);
+      // Validate the response structure
+      if (data && Array.isArray(data.templates) && typeof data.totalCount === 'number') {
+        const newTemplates = data.templates;
+        const fetchedCount = newTemplates.length;
+        const newTotalCount = data.totalCount;
+        
+        setTotalCount(newTotalCount); // Update total count
+
+        // Append or set templates based on loadMore flag
+        setUnreviewedTemplates(prev => loadMore ? [...prev, ...newTemplates] : newTemplates);
+        
+        // Determine if there are more pages
+        const currentTotalLoaded = loadMore ? unreviewedTemplates.length + fetchedCount : fetchedCount;
+        setHasMore(currentTotalLoaded < newTotalCount);
+
+        // Update current page if loading more
+        if (loadMore) {
+          setCurrentPage(pageToFetch);
+        }
+
       } else {
-        console.error('API did not return an array:', data);
+        console.error('API did not return the expected format:', data);
         setUnreviewedTemplates([]);
+        setTotalCount(0);
+        setHasMore(false);
         throw new Error('Received invalid data format from the server.');
       }
 
     } catch (err: any) {
       console.error("Failed to fetch unreviewed templates:", err);
       setError(err.message || 'Failed to load templates. Please try again later.');
+      // Reset state on error
       setUnreviewedTemplates([]);
+      setTotalCount(0);
+      setHasMore(false);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   };
 
   // Fetch on initial mount
   useEffect(() => {
-    fetchUnreviewedTemplates();
+    fetchUnreviewedTemplates(1, false); // Fetch page 1 initially
   }, []);
 
   // Fetch when refreshTrigger prop changes
   useEffect(() => {
-    if (refreshTrigger > 0) { // Avoid re-fetching on initial mount if trigger starts at 0
-        console.log('Refresh trigger changed, re-fetching unreviewed templates...');
-        fetchUnreviewedTemplates();
+    if (refreshTrigger > 0) { 
+        console.log('Refresh trigger changed, re-fetching page 1...');
+        fetchUnreviewedTemplates(1, false); // Fetch page 1 on trigger
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger]); 
 
   const handleRefreshClick = () => {
-    fetchUnreviewedTemplates();
+    fetchUnreviewedTemplates(1, false); // Fetch page 1 on manual refresh
     toast.success('Refreshed review list');
   };
 
+  // Handle Load More click
+  const handleLoadMoreClick = () => {
+      if (hasMore && !isLoadingMore) {
+          fetchUnreviewedTemplates(currentPage + 1, true); // Fetch next page
+      }
+  };
+
   const handleEditClick = (template: MemeTemplate) => {
-    // Set state for edit modal
     setCurrentEditingTemplate(template);
     setEditModalInitialName(template.name);
     setEditModalInitialInstructions(template.instructions || '');
     setIsEditModalOpen(true);
-    // No longer setting inline edit state
   };
 
-  // Removed handleCancelClick (no longer needed for inline)
-  // Removed handleSaveName (no longer needed for inline)
-
-  // Combined save handler for the modal
-  const handleSaveModal = async (templateId: string, newName: string, newInstructions: string): Promise<void> => {
-      console.log('Saving changes from modal for:', templateId, { name: newName, instructions: newInstructions });
+  // Just saves Name/Instructions changes and updates item IN the list
+  const handleSaveChangesOnly = async (templateId: string, newName: string, newInstructions: string): Promise<MemeTemplate | null> => {
+      console.log('Saving changes only for:', templateId, { name: newName, instructions: newInstructions });
       const originalTemplate = unreviewedTemplates.find(t => t.id === templateId);
       const payload: Partial<MemeTemplate> = {};
+      let changesMade = false;
 
       if (newName !== originalTemplate?.name) {
           payload.name = newName;
+          changesMade = true;
       }
       if (newInstructions !== (originalTemplate?.instructions || '')) {
           payload.instructions = newInstructions;
+          changesMade = true;
       }
 
-      if (Object.keys(payload).length === 0) {
-          toast('No changes detected in modal.');
-          return Promise.resolve(); // Resolve immediately if no changes
+      if (!changesMade) {
+          toast('No changes detected.');
+          return Promise.resolve(originalTemplate || null); // Resolve with original if no changes
       }
 
-      // We wrap the core logic in a promise to handle async in the modal
+      // Wrap in promise for consistency
       return new Promise(async (resolve, reject) => {
           try {
-              const response = await fetch(`/api/templates/${templateId}`, {
+              console.log('Payload for save:', payload);
+              const saveResponse = await fetch(`/api/templates/${templateId}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload), // Send combined payload
+                  body: JSON.stringify(payload),
               });
 
-              if (!response.ok) {
-                  const errorData = await response.json();
-                  throw new Error(errorData.error || `Failed to save changes (Status: ${response.status})`);
+              if (!saveResponse.ok) {
+                  const errorData = await saveResponse.json();
+                  throw new Error(errorData.error || `Failed to save changes (Status: ${saveResponse.status})`);
               }
 
-              const savedTemplate: MemeTemplate = await response.json();
+              const savedTemplate: MemeTemplate = await saveResponse.json(); // Get updated template
 
-              // Update local state
+              // Update local state IN PLACE
               setUnreviewedTemplates(prev =>
-                  prev.map(t => t.id === templateId ? { ...t, ...savedTemplate } : t)
+                  prev.map(t => t.id === templateId ? savedTemplate : t) // Update the item
               );
 
-              toast.success('Template updated successfully!');
-              resolve(); // Resolve the promise on success
+              toast.success('Template changes saved!');
+              resolve(savedTemplate); // Resolve with the saved template
           } catch (err: any) {
-              console.error('Modal save failed:', err);
+              console.error('Save changes failed:', err);
               toast.error(`Save failed: ${err.message}`);
-              reject(err); // Reject the promise on error
+              reject(err);
           }
       });
   };
 
-  // Removed handleSaveInstructions (logic merged into handleSaveModal)
+  // Just approves the template and removes from list
+  const handleApproveOnly = async (templateId: string): Promise<void> => {
+      const template = unreviewedTemplates.find(t => t.id === templateId);
+      if (!template) return Promise.reject(new Error("Template not found locally")); // Should not happen
 
-  // ... existing handleApprove and handleDelete logic ...
-  const handleApprove = async (templateId: string) => {
-    const template = unreviewedTemplates.find(t => t.id === templateId);
-    if (!template) return;
+      console.log('Approving template:', templateId);
 
-    console.log('Approving:', templateId);
-    
-    try {
-      const response = await fetch(`/api/templates/${templateId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reviewed: true }),
+      return new Promise(async (resolve, reject) => {
+          try {
+              const approveResponse = await fetch(`/api/templates/${templateId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ reviewed: true }),
+              });
+
+              if (!approveResponse.ok) {
+                  const errorData = await approveResponse.json();
+                  throw new Error(errorData.error || `Failed to approve template (Status: ${approveResponse.status})`);
+              }
+              console.log('Approval successful.');
+
+              // Remove from local state
+              setUnreviewedTemplates(prev => prev.filter(t => t.id !== templateId));
+              toast.success(`Template "${template.name}" approved!`);
+              resolve();
+          } catch (err: any) {
+              console.error('Approval failed:', err);
+              toast.error(`Approval failed: ${err.message}`);
+              reject(err);
+          }
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to approve template (Status: ${response.status})`);
-      }
-
-      // Remove from local state
-      setUnreviewedTemplates(prev => prev.filter(t => t.id !== templateId));
-      toast.success(`Template "${template.name}" approved!`);
-    } catch (err: any) {
-      console.error('Approval failed:', err);
-      toast.error(`Approval failed: ${err.message}`);
-    }
   };
 
+  // Saves changes (if any) AND THEN approves/removes
+  const handleSaveAndApprove = async (templateId: string, newName: string, newInstructions: string): Promise<void> => {
+      console.log('Attempting Save & Approve for:', templateId);
+      return new Promise(async (resolve, reject) => {
+        try {
+            // Step 1: Attempt to save changes (this handles the "no changes" case internally)
+            await handleSaveChangesOnly(templateId, newName, newInstructions);
+            // If save succeeds (or no changes were needed)...
+
+            // Step 2: Attempt to approve
+            await handleApproveOnly(templateId);
+
+            // If both steps complete without throwing error...
+            resolve(); // Overall success
+        } catch (err) {
+            // Error toast is shown in individual handlers
+            console.error('Save & Approve sequence failed:', err);
+            reject(err); // Reject the overall promise
+        }
+      });
+  };
+  
   const handleDelete = async (templateId: string) => {
     const template = unreviewedTemplates.find(t => t.id === templateId);
     if (!template) return;
@@ -332,19 +435,39 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
     }
   };
 
-  // ... existing modal handlers (handlePreviewClick, closeModal) ...
-  // Open modal handler
-  const handlePreviewClick = (videoUrl: string | null) => {
-    if (videoUrl) {
-      setModalVideoUrl(videoUrl);
-      setIsModalOpen(true);
+  // --- Handlers for Preview/Crop Modal --- 
+  const handlePreviewClick = (template: MemeTemplate | null) => {
+    if (template && template.video_url) {
+      setCurrentPreviewTemplate(template);
+      setIsPreviewModalOpen(true);
+    } else {
+        toast.error('Cannot preview - video URL is missing.');
     }
   };
 
-  // Close modal handler
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setModalVideoUrl(null);
+  const closePreviewModal = () => {
+    setIsPreviewModalOpen(false);
+    setCurrentPreviewTemplate(null);
+  };
+
+  // --- Updated Crop Complete Handler --- 
+  const handleCropComplete = (templateId: string, updatedUrl?: string) => {
+      console.log(`Crop completed for template ${templateId}.`);
+      if (updatedUrl) {
+          console.log(`Updating URL in local state to: ${updatedUrl}`);
+          setUnreviewedTemplates(prevTemplates => 
+              prevTemplates.map(template => 
+                  template.id === templateId 
+                      ? { ...template, video_url: updatedUrl } // Update the URL
+                      : template
+              )
+          );
+          toast.success('Template preview updated locally.'); // Optional feedback
+      } else {
+          // Fallback if URL wasn't passed back - refresh the whole list
+          console.warn('Updated URL not provided after crop, refreshing full list as fallback.');
+          handleRefreshClick(); 
+      }
   };
 
   if (isLoading) {
@@ -374,21 +497,43 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
   return (
     <div className={`${className} space-y-4 bg-gray-800 p-6 rounded-lg border border-gray-700 mt-8`}>
       <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-white">Review Templates</h2>
+             {/* Display count in header */}
+            <h2 className="text-xl font-bold text-white">Review Templates ({totalCount})</h2>
             <button
                 onClick={handleRefreshClick}
-                disabled={isLoading}
+                disabled={isLoading} // Only disable on full refresh, not load more
                 className="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-wait transition-colors text-sm"
                 >
-                {isLoading ? 'Refreshing...' : 'Refresh'}
+                {isLoading && !isLoadingMore ? 'Refreshing...' : 'Refresh'} 
             </button>
         </div>
-       {unreviewedTemplates.length === 0 ? (
+       
+       {/* Loading state */}
+       {isLoading && unreviewedTemplates.length === 0 && (
           <div className="py-8 text-center text-gray-400">
-            <p>No templates are currently awaiting review.</p>
-          </div>
-        ) : (
-        <div className="overflow-x-auto relative">
+                <svg className="animate-spin h-8 w-8 mx-auto mb-2 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p>Loading templates...</p>
+            </div>
+       )}
+
+       {/* Error state */}
+       {!isLoading && error && (
+          <div className="text-red-400 text-sm p-3 bg-red-900/30 rounded border border-red-700">Error: {error}</div>
+       )}
+       
+       {/* Empty state */}
+       {!isLoading && !error && totalCount === 0 && (
+           <div className="py-8 text-center text-gray-400">
+                <p>No templates are currently awaiting review.</p>
+            </div>
+       )}
+
+       {/* Table display */}
+       {!isLoading && unreviewedTemplates.length > 0 && (
+          <div className="overflow-x-auto relative">
               <table className="w-full min-w-[800px] border-collapse text-sm">
                 <thead>
                   <tr className="bg-gray-700 text-left text-gray-300">
@@ -401,13 +546,12 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
                 </thead>
                 <tbody className="divide-y divide-gray-700">
                   {unreviewedTemplates.map((template) => (
-                    // No longer checking editingTemplateId for row styling
                     <tr key={template.id} className="hover:bg-gray-750 bg-gray-800">
-                      {/* Preview Column - unchanged */} 
+                      {/* Preview Column */}
                        <td className="px-4 py-2 align-top">
                           <div 
                               className="w-24 h-16 bg-gray-700 rounded flex items-center justify-center text-gray-400 text-xs cursor-pointer border border-gray-600 hover:opacity-80 transition-opacity"
-                              onClick={() => handlePreviewClick(template.video_url)} // Use video_url for modal
+                              onClick={() => handlePreviewClick(template)} // Pass the whole template
                               title="Click to preview video"
                           >
                           {template.poster_url ? (
@@ -415,35 +559,32 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
                                   src={template.poster_url} 
                                   alt="Preview" 
                                   className="w-full h-full object-cover rounded" 
-                                  // Basic error handling for image
                                   onError={(e) => { 
                                       e.currentTarget.style.display = 'none'; 
                                       e.currentTarget.parentElement?.querySelector('.fallback-text')?.classList.remove('hidden'); 
                                   }} 
                               />
                           ) : template.video_url ? (
-                              // Display something indicating video exists if no poster
                                <span className="fallback-text text-center p-1">Video (No Poster)</span>
                           ) : (
                                <span className="fallback-text">No Preview</span>
                           )}
-                          {/* Hidden fallback text for image error */}
                           <span className="fallback-text hidden absolute inset-0 flex items-center justify-center">No Preview</span>
                           </div>
                       </td>
-                      {/* Name Column - No longer has inline edit */} 
+                      {/* Name Column */}
                       <td className="px-4 py-2 align-top text-gray-300">
                          <div className="font-medium text-gray-100 whitespace-normal break-words max-w-xs">
                            {template.name}
                          </div>
                       </td>
-                      {/* Instructions Column - No longer has inline edit */} 
+                      {/* Instructions Column */}
                       <td className="px-4 py-2 align-top text-gray-300">
                         <div className="text-gray-300 whitespace-pre-wrap max-w-sm text-xs line-clamp-4" title={template.instructions}>
                           {template.instructions || <span className="text-gray-500 italic">No instructions</span>}
                         </div>
                       </td>
-                      {/* Source Column - unchanged */} 
+                      {/* Source Column */}
                        <td className="px-4 py-2 align-top text-gray-400">
                         {template.original_source_url ? (
                           <a
@@ -459,18 +600,17 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
                           <span className="text-gray-500">-'</span>
                         )}
                       </td>
-                      {/* Actions Column - No longer has inline edit buttons */} 
+                      {/* Actions Column */} 
                       <td className="px-4 py-2 align-top">
                         <div className="flex items-center space-x-2">
-                            {/* Only show standard Edit/Approve/Delete */}
                             <button
-                                onClick={() => handleEditClick(template)} // Opens the combined modal
+                                onClick={() => handleEditClick(template)} 
                                 className="px-3 py-1 text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
                                 >
                                 Edit
                                 </button>
                                 <button
-                                onClick={() => handleApprove(template.id)}
+                                onClick={() => handleApproveOnly(template.id)} // Use handleApproveOnly for the standalone button
                                 className="px-3 py-1 text-xs font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-emerald-500"
                                 >
                                 Approve
@@ -487,48 +627,41 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
                   ))}
                 </tbody>
               </table>
-        </div>
-        )} 
-
-      {/* Video Preview Modal - unchanged */} 
-       {isModalOpen && modalVideoUrl && (
-         // ... modal JSX ...
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300"
-          onClick={closeModal}
-        >
-          <div 
-            className="bg-gray-900 p-4 rounded-lg max-w-3xl w-full mx-4 relative shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button 
-              onClick={closeModal}
-              className="absolute top-2 right-2 text-gray-400 hover:text-white text-2xl leading-none"
-              aria-label="Close video preview"
-            >
-              &times;
-            </button>
-            <video 
-              src={modalVideoUrl} 
-              controls 
-              autoPlay // Add autoplay for convenience
-              className="w-full max-h-[80vh] rounded"
-            >
-              Your browser does not support the video tag.
-            </video>
           </div>
-        </div>
-      )}
+       )}
 
-       {/* Edit Template Modal (Renamed and updated) */}
-        <EditTemplateModal 
-            isOpen={isEditModalOpen}
-            onClose={() => setIsEditModalOpen(false)}
-            template={currentEditingTemplate} 
-            initialName={editModalInitialName}
-            initialInstructions={editModalInitialInstructions}
-            onSave={handleSaveModal} // Pass the combined save handler
-        />
+        {/* Load More Button */} 
+        {!isLoading && hasMore && (
+            <div className="mt-6 text-center">
+            <button
+                onClick={handleLoadMoreClick}
+                disabled={isLoadingMore}
+                className="px-5 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-wait transition-colors text-sm font-medium"
+            >
+                {isLoadingMore ? 'Loading...' : 'Load More'}
+            </button>
+            </div>
+        )}
+
+      {/* Edit Template Modal */} 
+      <EditTemplateModal 
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          template={currentEditingTemplate} 
+          initialName={editModalInitialName}
+          initialInstructions={editModalInitialInstructions}
+          uploaderName={currentEditingTemplate?.uploader_name}
+          onSaveChanges={handleSaveChangesOnly}
+          onSaveAndApprove={handleSaveAndApprove}
+      />
+
+      {/* New Preview/Crop Modal */} 
+      <VideoPreviewCropModal 
+          isOpen={isPreviewModalOpen}
+          onClose={closePreviewModal}
+          template={currentPreviewTemplate}
+          onCropComplete={handleCropComplete}
+      />
     </div>
   );
 };
