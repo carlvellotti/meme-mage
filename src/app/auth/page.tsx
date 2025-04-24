@@ -5,6 +5,9 @@ import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { useSupabase } from '@/app/components/SupabaseProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import type { Provider } from '@supabase/supabase-js';
+import { Database } from '@/lib/supabase/types';
 
 export default function AuthPage() {
   const { supabase, session } = useSupabase();
@@ -88,7 +91,7 @@ export default function AuthPage() {
               },
             },
           }}
-          providers={['email']} // Still might show type error, functionally okay
+          providers={['email'] as unknown as Provider[]}
           // Redirect is handled by session check in useEffect
           // theme="dark" // ThemeSupa handles dark mode based on CSS variables or prefers-color-scheme
         />
