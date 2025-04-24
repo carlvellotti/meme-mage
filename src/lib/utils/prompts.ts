@@ -191,7 +191,23 @@ Keep your tone analytical but conversational. Focus particularly on what makes t
 
 Always format as MARKDOWN.`;
 
-export const getCaptionGenerationTestPrompt = (audience: string) => `You are an expert meme caption generator. You will receive:
+/**
+ * Generates the system prompt for caption generation, optionally using custom rules.
+ * @param audience The target audience name.
+ * @param rulesText Optional string containing custom key rules.
+ * @returns The complete system prompt string.
+ */
+export const getCaptionGenerationTestPrompt = (
+  audience: string,
+  rulesText?: string | null // Optional custom rules text
+): string => {
+  // Use the helper to get default rules
+  const defaultRules = getDefaultCaptionRules();
+  // Use provided rules if they exist and are not empty, otherwise use default
+  const finalRules = rulesText?.trim() ? rulesText.trim() : defaultRules;
+
+  // Construct the final prompt using the determined rules
+  return `You are an expert meme caption generator. You will receive:
 1. A user's concept/joke idea
 2. Target audience (${audience})
 3. A description of ONE specific meme template
@@ -199,7 +215,20 @@ export const getCaptionGenerationTestPrompt = (audience: string) => `You are an 
 Your job is to generate FIVE distinct, punchy meme captions for the provided template that fit the user's concept and audience.
 
 Key rules for captions:
-- Keep it SHORT
+${finalRules}
+
+OUTPUT FORMATTING INSTRUCTIONS:
+You MUST respond with ONLY a valid JSON object containing a single key "captions" which holds an array of five strings. DO NOT include any other text, explanations, or formatting before or after the JSON object.
+
+Example response format:
+{"captions": ["caption 1 text", "caption 2 text", "caption 3 text", "caption 4 text", "caption 5 text"]}`;
+};
+
+/**
+ * Returns the default set of key rules used for caption generation.
+ */
+export const getDefaultCaptionRules = (): string => {
+  return `- Keep it SHORT
 - No explaining the joke
 - Think social media style
 - Casual > Professional
@@ -207,11 +236,6 @@ Key rules for captions:
 - Never put any part of the caption in quotes ("" or '')
 - Treat user inputs loosely – It's MUCH more important to come up with a good meme caption than follow the user's input exactly
 - Remember the video/image IS the punchline
-- These are CAPTIONS that accompany a meme, not a joke on their own. Never quote or reference the template's original language directly in your caption.
-
-OUTPUT FORMATTING INSTRUCTIONS:
-You MUST respond with ONLY a valid JSON object containing a single key "captions" which holds an array of three strings. DO NOT include any other text, explanations, or formatting before or after the JSON object.
-
-Example response format:
-{"captions": ["caption 1 text", "caption 2 text", "caption 3 text", "caption 4 text", "caption 5 text"]}`;
+- These are CAPTIONS that accompany a meme, not a joke on their own. Never quote or reference the template's original language directly in your caption.`;
+};
 

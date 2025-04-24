@@ -7,12 +7,25 @@ import MemeGenerator from '@/app/components/MemeGenerator'; // Assuming this com
 import { getCaptionGenerationTestPrompt } from "@/lib/utils/prompts";
 import toast from 'react-hot-toast';
 import PersonaManager from './PersonaManager'; // Import PersonaManager
+import CaptionRuleManager from './CaptionRuleManager'; // Import CaptionRuleManager
+
+// --- localStorage Keys ---
+const LOCALSTORAGE_PERSONA_ID_KEY = 'memeSelectorV2_selectedPersonaId';
+const LOCALSTORAGE_RULE_SET_ID_KEY = 'memeSelectorV2_selectedRuleSetId';
 
 // Define the Persona type (should match PersonaManager)
 interface Persona {
   id: string;
   name: string;
   description?: string | null;
+}
+
+// Define the Caption Rule interface (should match CaptionRuleManager)
+interface CaptionRule {
+  id: string;
+  name: string;
+  rules_text: string;
+  // Add other fields if needed from the DB schema
 }
 
 // Fetcher function (can be moved to a shared util)
@@ -22,7 +35,7 @@ const fetcher = (url: string) => fetch(url).then(async (res) => {
     throw new Error(errorData.error || 'An error occurred');
   }
   const result = await res.json();
-  return result.data; 
+  return result.data;
 });
 
 // Define the structure for storing results per template/model
@@ -72,6 +85,7 @@ const getModelDisplayName = (modelId: string) => {
 export default function MemeSelectorV2() {
   // --- State Variables --- 
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(''); // Store selected persona ID
+  const [selectedRuleSetId, setSelectedRuleSetId] = useState<string>(''); // Store selected rule set ID ('' for default)
   const [userPrompt, setUserPrompt] = useState<string>(''); // Optional prompt
   const [isGreenscreenMode, setIsGreenscreenMode] = useState<boolean>(false); // Greenscreen mode state
   const [isLoadingTemplates, setIsLoadingTemplates] = useState<boolean>(false);
@@ -85,6 +99,8 @@ export default function MemeSelectorV2() {
   
   // State for Persona Manager Modal
   const [isPersonaModalOpen, setIsPersonaModalOpen] = useState(false);
+  // State for Caption Rule Manager Modal
+  const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
 
   // State to track loading for feedback from options cards
   const [optionFeedbackLoading, setOptionFeedbackLoading] = useState<Record<string, boolean>>({});
@@ -95,6 +111,48 @@ export default function MemeSelectorV2() {
     error: personasError, 
     isLoading: isLoadingPersonas 
   } = useSWR<Persona[]>('/api/personas', fetcher);
+
+  // Fetch Caption Rule Sets
+  const { 
+    data: captionRuleSets, 
+    error: ruleSetsError, 
+    isLoading: isLoadingRuleSets 
+  } = useSWR<CaptionRule[]>('/api/caption-rules', fetcher);
+
+  // --- Effects --- 
+
+  // Effect to load saved selections from localStorage on mount
+  useEffect(() => {
+    const savedPersonaId = localStorage.getItem(LOCALSTORAGE_PERSONA_ID_KEY);
+    const savedRuleSetId = localStorage.getItem(LOCALSTORAGE_RULE_SET_ID_KEY);
+    if (savedPersonaId) {
+      setSelectedPersonaId(savedPersonaId);
+    }
+    if (savedRuleSetId) {
+      setSelectedRuleSetId(savedRuleSetId);
+    }
+    // Run only once on mount
+  }, []); 
+
+  // Effect to save selected persona ID to localStorage
+  useEffect(() => {
+    if (selectedPersonaId) {
+      localStorage.setItem(LOCALSTORAGE_PERSONA_ID_KEY, selectedPersonaId);
+    } else {
+      // Remove if deselected (though current UI doesn't allow direct deselection)
+      localStorage.removeItem(LOCALSTORAGE_PERSONA_ID_KEY);
+    }
+  }, [selectedPersonaId]);
+
+  // Effect to save selected rule set ID to localStorage
+  useEffect(() => {
+    if (selectedRuleSetId) {
+      localStorage.setItem(LOCALSTORAGE_RULE_SET_ID_KEY, selectedRuleSetId);
+    } else {
+      // If empty string (Default Rules), remove from storage
+      localStorage.removeItem(LOCALSTORAGE_RULE_SET_ID_KEY);
+    }
+  }, [selectedRuleSetId]);
 
   // Effect to handle zero personas case
   useEffect(() => {
@@ -116,6 +174,14 @@ export default function MemeSelectorV2() {
     const selectedPersona = personas?.find(p => p.id === selectedPersonaId);
     const audienceContext = selectedPersona ? selectedPersona.name : "general audience"; // Fallback
     
+    // --- Determine the rules text to use --- 
+    const selectedRuleSet = captionRuleSets?.find(rule => rule.id === selectedRuleSetId);
+    const customRulesText = selectedRuleSet?.rules_text; // Will be undefined if default ('') is selected
+    
+    // --- Get System Prompt using the determined rules --- 
+    const systemPrompt = getCaptionGenerationTestPrompt(audienceContext, customRulesText);
+    // -----------------------------------------------------
+
     const models = [
       'anthropic-3.5',
       'anthropic-3.7',
@@ -133,13 +199,13 @@ export default function MemeSelectorV2() {
     
     for (const template of templates) {
       for (const modelId of models) {
-        const systemPrompt = getCaptionGenerationTestPrompt(audienceContext);
+        // systemPrompt is now determined above the loops
         const userMessage = `User Prompt: "${userPrompt || "Create captions for this meme template"}"\n\nTemplate Name: ${template.name}\nTemplate Instructions: ${template.instructions || 'None'}`;
         
         const apiRequestBody = {
           model: modelId,
           messages: [
-            { role: 'system', content: systemPrompt },
+            { role: 'system', content: systemPrompt }, // Using the dynamically determined prompt
             { role: 'user', content: userMessage }
           ],
           temperature: 0.7
@@ -245,7 +311,7 @@ export default function MemeSelectorV2() {
       // Optionally, update UI within the card to show feedback was given
 
     } catch (err: any) {
-      console.error("Feedback Error from Options:", err);
+      console.error("Feedback Error from Options:", err); // Corrected console log context
       toast.error(err.message || 'Could not save feedback.', { id: toastId });
     } finally {
       setOptionFeedbackLoading(prev => ({ ...prev, [templateId]: false }));
@@ -319,6 +385,21 @@ export default function MemeSelectorV2() {
     return { templates: options.map(option => ({ template: option.template, captions: option.modelCaptions.flatMap(model => model.captions || []) })) };
   };
 
+  const handleStartOver = () => {
+     setMemeOptions(null);
+     setFetchedTemplates(null);
+     setError(null);
+     setSelectedPersonaId('');
+     setSelectedRuleSetId(''); // Reset rule set selection
+     setUserPrompt('');
+     setIsGreenscreenMode(false); // Reset greenscreen mode
+     setSelectedFinalTemplate(null);
+     setSelectedFinalCaption(null);
+     // Clear localStorage
+     localStorage.removeItem(LOCALSTORAGE_PERSONA_ID_KEY);
+     localStorage.removeItem(LOCALSTORAGE_RULE_SET_ID_KEY);
+  };
+
   // --- Rendering Logic --- 
 
   // Render MemeGenerator when template and caption are selected
@@ -328,8 +409,8 @@ export default function MemeSelectorV2() {
         initialTemplate={selectedFinalTemplate}
         initialCaption={selectedFinalCaption}
         initialOptions={convertToSelectedMemeFormat(memeOptions)}
-        isGreenscreenMode={false} // Pass the actual mode if needed
-        onToggleMode={() => {}} // Implement if needed
+        isGreenscreenMode={isGreenscreenMode} // Pass the mode state
+        onToggleMode={() => setIsGreenscreenMode(!isGreenscreenMode)} // Pass toggle handler
         personaId={selectedPersonaId} // Pass selected persona ID
         onBack={() => {
           setSelectedFinalTemplate(null);
@@ -344,6 +425,9 @@ export default function MemeSelectorV2() {
     <div className="w-full mx-auto p-4">
       {/* Persona Manager Modal */} 
       <PersonaManager isOpen={isPersonaModalOpen} onClose={() => setIsPersonaModalOpen(false)} />
+      {/* Caption Rule Manager Modal */}
+      <CaptionRuleManager isOpen={isRuleModalOpen} onClose={() => setIsRuleModalOpen(false)} />
+
 
       {/* Global Error Display */} 
       {error && !isLoadingTemplates && !isLoadingCaptions && (
@@ -355,77 +439,107 @@ export default function MemeSelectorV2() {
 
       {/* Initial Form - Show if no results yet and not loading */} 
       {!memeOptions && !isLoadingTemplates && !isLoadingCaptions && (
-        <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8 mx-auto" style={{ maxWidth: '600px' }}> 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Persona Selection */} 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Select Persona *
-              </label>
-              <div className="flex items-center gap-2">
-                <select
-                  value={selectedPersonaId}
-                  onChange={(e) => setSelectedPersonaId(e.target.value)}
-                  disabled={isLoadingPersonas}
-                  className="flex-grow p-2 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                >
-                  <option value="" disabled>{isLoadingPersonas ? 'Loading...' : '-- Select a Persona --'}</option>
-                  {personas?.map((persona) => (
-                    <option key={persona.id} value={persona.id}>
-                      {persona.name}
-                    </option>
-                  ))}
-                </select>
-                <button 
-                  type="button"
-                  onClick={() => setIsPersonaModalOpen(true)}
-                  className="flex-shrink-0 py-2 px-3 bg-gray-600 hover:bg-gray-500 text-white rounded-md text-sm"
-                  title="Manage Personas"
-                >
-                  Manage
-                </button>
-              </div>
-              {personasError && <p className="text-xs text-red-400 mt-1">Error loading personas.</p>}
+        <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl mx-auto mb-8">
+          {/* Persona Selection */} 
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Select Persona *
+            </label>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedPersonaId}
+                onChange={(e) => setSelectedPersonaId(e.target.value)}
+                disabled={isLoadingPersonas}
+                className="flex-grow p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                required
+              >
+                <option value="" disabled>{isLoadingPersonas ? 'Loading...' : '-- Select a Persona --'}</option>
+                {personas?.map((persona) => (
+                  <option key={persona.id} value={persona.id}>
+                    {persona.name}
+                  </option>
+                ))}
+              </select>
+              <button 
+                type="button"
+                onClick={() => setIsPersonaModalOpen(true)}
+                className="flex-shrink-0 py-2 px-3 bg-gray-600 hover:bg-gray-500 text-white rounded-md text-sm"
+                title="Manage Personas"
+              >
+                Manage
+              </button>
             </div>
+            {personasError && <p className="text-xs text-red-400 mt-1">Error loading personas.</p>}
+          </div>
 
-            {/* Meme Prompt */} 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Describe your meme idea (Optional)
-              </label>
-              <textarea
-                value={userPrompt}
-                onChange={(e) => setUserPrompt(e.target.value)}
-                className="w-full p-2 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
-                rows={3}
-                placeholder="If you have an idea, describe it here... Otherwise, we'll pick random templates based on the persona."
+          {/* Caption Rule Set Selection */} 
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Caption Rules Style
+            </label>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedRuleSetId}
+                onChange={(e) => setSelectedRuleSetId(e.target.value)}
+                disabled={isLoadingRuleSets}
+                className="flex-grow p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                <option value="">Default Rules</option>
+                {captionRuleSets?.map((rule) => (
+                  <option key={rule.id} value={rule.id}>
+                    {rule.name}
+                  </option>
+                ))}
+              </select>
+              <button 
+                type="button"
+                onClick={() => setIsRuleModalOpen(true)}
+                className="flex-shrink-0 py-2 px-3 bg-gray-600 hover:bg-gray-500 text-white rounded-md text-sm"
+                title="Manage Caption Rules"
+              >
+                Manage
+              </button>
+            </div>
+            {ruleSetsError && <p className="text-xs text-red-400 mt-1">Error loading rule sets.</p>}
+          </div>
+
+          {/* Meme Prompt */} 
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Describe your meme idea (Optional)
+            </label>
+            <textarea
+              value={userPrompt}
+              onChange={(e) => setUserPrompt(e.target.value)}
+              className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
+              rows={3}
+              placeholder="If you have an idea, describe it here... Otherwise, we'll pick random templates based on the persona."
+            />
+            <p className="text-xs text-gray-400 mt-1">Leave blank for random templates.</p>
+          </div>
+
+          {/* Greenscreen Mode Toggle */}
+          <div className="flex items-center justify-start pt-2">
+            <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isGreenscreenMode}
+                onChange={() => setIsGreenscreenMode(!isGreenscreenMode)}
+                className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
               />
-              <p className="text-xs text-gray-400 mt-1">Leave blank for random templates.</p>
-            </div>
+              <span>Greenscreen Mode</span>
+            </label>
+          </div>
 
-            {/* Greenscreen Mode Toggle */}
-            <div className="flex items-center justify-start pt-5 sm:pt-0"> {/* Adjust padding for alignment */}
-              <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isGreenscreenMode}
-                  onChange={() => setIsGreenscreenMode(!isGreenscreenMode)}
-                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
-                />
-                <span>Greenscreen Mode</span>
-              </label>
-            </div>
-
-            {/* Submit Button */} 
-            <button
-              type="submit"
-              disabled={isLoadingTemplates || isLoadingPersonas || !selectedPersonaId}
-              className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isLoadingTemplates ? 'Fetching Templates...' : 'Generate Meme Options'}
-            </button>
-          </form>
-        </div>
+          {/* Submit Button */} 
+          <button
+            type="submit"
+            disabled={isLoadingTemplates || isLoadingPersonas || isLoadingRuleSets || !selectedPersonaId}
+            className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {isLoadingTemplates ? 'Fetching Templates...' : 'Generate Meme Options'}
+          </button>
+        </form>
       )}
 
       {/* Loading Indicator - Show only during caption generation */} 
@@ -511,7 +625,7 @@ export default function MemeSelectorV2() {
             ))}
           </div>
           <button 
-            onClick={() => { setMemeOptions(null); setFetchedTemplates(null); setError(null); setSelectedPersonaId(''); setUserPrompt(''); }} 
+            onClick={handleStartOver} 
             className="mt-6 py-2 px-4 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors block mx-auto"
           >
            &larr; Start Over
