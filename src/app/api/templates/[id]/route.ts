@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase/client';
+import { createClient } from '@/lib/supabase/route';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { generateEmbedding } from '@/lib/utils/embeddings';
@@ -8,6 +8,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const supabase = createClient();
     const { data, error } = await supabase
       .from('meme_templates')
       .select('*')
@@ -48,14 +49,16 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const supabase = createClient();
   const id = params.id;
   let body;
 
-  // --- TODO: Security Check - Ensure user is admin/editor ---
-  // Example: const { isAdmin, error: authError } = await checkUserPermissions(request);
-  // if (authError || !isAdmin) {
-  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // }
+  // Check auth first
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    console.warn('Unauthorized PATCH request to /api/templates/[id]');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   try {
     body = await request.json();
@@ -146,13 +149,15 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const supabase = createClient();
   const id = params.id;
 
-  // --- TODO: Security Check - Ensure user is admin/editor ---
-  // Example: const { isAdmin, error: authError } = await checkUserPermissions(request);
-  // if (authError || !isAdmin) {
-  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // }
+  // Check auth first
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    console.warn('Unauthorized DELETE request to /api/templates/[id]');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   if (!id) {
     return NextResponse.json({ error: 'Missing template ID' }, { status: 400 });

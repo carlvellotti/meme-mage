@@ -1,12 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '@/lib/supabase/types';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from './types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Renamed function for clarity and consistency with new helper names
+export const createClient = () => createClientComponentClient<Database>();
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables');
-  throw new Error('Missing Supabase environment variables');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey); 
+// Remove old code if it exists, otherwise just add the above.
+// Example of old code to remove:
+// import { createBrowserClient } from '@supabase/ssr';
+// export const supabase = createBrowserClient<Database>(
+//   process.env.NEXT_PUBLIC_SUPABASE_URL!,
+//   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// ); 

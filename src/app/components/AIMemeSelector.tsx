@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { MemeTemplate } from '@/lib/supabase/types';
-import { supabase } from '@/lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
 import SpinningOrb from './SpinningOrb';
 import BackgroundSVG from './BackgroundSVG';
@@ -41,6 +41,7 @@ interface TemplateResponse {
 }
 
 export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, onToggleMode }: AIMemeSelector) {
+  const supabase = createClient();
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [audience, setAudience] = useState('');

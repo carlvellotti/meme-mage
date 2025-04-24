@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BackgroundImage } from '@/lib/types/meme';
-import { supabase } from '@/lib/supabase/client';
+import { createClient } from '@/lib/supabase/client';
 
 interface BackgroundSelectorProps {
   onSelect: (background: BackgroundImage) => void;
@@ -8,7 +8,10 @@ interface BackgroundSelectorProps {
 }
 
 export default function BackgroundSelector({ onSelect, selected }: BackgroundSelectorProps) {
+  const supabase = createClient();
   const [backgrounds, setBackgrounds] = useState<BackgroundImage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch backgrounds from your API/storage

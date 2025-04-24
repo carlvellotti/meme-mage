@@ -8,6 +8,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
+import { createClient } from '@/lib/supabase/route'; // Use route handler client
 
 export const runtime = 'edge';
 
@@ -67,30 +68,17 @@ const providers = {
 export async function POST(req: Request) {
   console.log('Received request to /api/ai/chat');
 
-  // 1. Authentication
-  const authHeader = req.headers.get('Authorization');
-  const expectedToken = process.env.AI_API_SECRET_TOKEN;
+  // --- Authentication Check --- 
+  const supabase = createClient(); // Call helper without args
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  if (!expectedToken) {
-    console.error('AI_API_SECRET_TOKEN is not set in environment variables.');
-    return NextResponse.json(
-      { error: 'Server configuration error' },
-      { status: 500 }
-    );
-  }
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.warn('Missing or invalid Authorization header');
+  if (authError || !user) {
+    console.warn('Unauthorized API access attempt to /api/ai/chat');
+    // TODO: Log auth failure details (IP, user-agent)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  const token = authHeader.split(' ')[1];
-  if (token !== expectedToken) {
-    console.warn('Incorrect Bearer token provided');
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  console.log('Authentication successful');
+  const userId = user.id; 
+  // --------------------------
 
   try {
     // 2. Input Validation
@@ -98,7 +86,7 @@ export async function POST(req: Request) {
     const validationResult = RequestBodySchema.safeParse(requestJson);
 
     if (!validationResult.success) {
-      console.warn('Invalid request body:', validationResult.error.errors);
+      console.warn(`[User: ${userId}] Invalid request body:`, validationResult.error.errors);
       return NextResponse.json(
         { error: 'Invalid request body', details: validationResult.error.errors },
         { status: 400 }
@@ -106,13 +94,13 @@ export async function POST(req: Request) {
     }
 
     const { model: modelId, messages } = validationResult.data;
-    console.log(`Processing request for model: ${modelId}`);
+    console.log(`[User: ${userId}] Processing request for model: ${modelId}`);
 
     // --- Special Handling for Grok (xAI) --- 
     if (modelId === 'grok-3-latest') {
       const grokApiKey = process.env.GROK_API_KEY; // Use GROK_API_KEY
       if (!grokApiKey) {
-        console.error('GROK_API_KEY is not set.');
+        console.error(`[User: ${userId}] GROK_API_KEY is not set.`);
         return NextResponse.json({ error: 'API key configuration error for Grok' }, { status: 500 });
       }
 
@@ -122,7 +110,7 @@ export async function POST(req: Request) {
         model: 'grok-3-latest',
       });
 
-      console.log('Calling Grok (xAI) API...');
+      console.log(`[User: ${userId}] Calling Grok (xAI) API...`);
       const startTime = Date.now();
 
       const response = await fetch(grokApiUrl, {
@@ -138,11 +126,11 @@ export async function POST(req: Request) {
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error(`Grok API error (${response.status}): ${errorBody}`);
+        console.error(`[User: ${userId}] Grok API error (${response.status}): ${errorBody}`);
         return NextResponse.json({ error: 'Grok API request failed', details: errorBody }, { status: response.status });
       }
 
-      console.log(`Grok non-streaming response received in ${duration}ms`);
+      console.log(`[User: ${userId}] Grok non-streaming response received in ${duration}ms`);
       const jsonResponse = await response.json();
       // Assuming Grok's non-streaming response has a structure like { choices: [{ message: { content: '...' } }] }
       // Adjust based on actual Grok API response format
@@ -155,7 +143,7 @@ export async function POST(req: Request) {
     const providerConfig = providers[modelId as keyof typeof providers];
 
     if (!providerConfig) {
-      console.error(`Unsupported model requested (post-Grok check): ${modelId}`);
+      console.error(`[User: ${userId}] Unsupported model requested (post-Grok check): ${modelId}`);
       return NextResponse.json(
         { error: 'Unsupported model' },
         { status: 400 }
@@ -165,7 +153,7 @@ export async function POST(req: Request) {
     // 4. API Key Retrieval
     const apiKey = process.env[providerConfig.apiKeyEnv];
     if (!apiKey) {
-      console.error(`API key ${providerConfig.apiKeyEnv} is not set.`);
+      console.error(`[User: ${userId}] API key ${providerConfig.apiKeyEnv} is not set.`);
       return NextResponse.json(
         { error: `API key configuration error for ${modelId}` },
         { status: 500 }
@@ -176,7 +164,7 @@ export async function POST(req: Request) {
     const aiProvider = providerConfig.init({ apiKey });
     const modelInstance = aiProvider(providerConfig.model) as LanguageModelV1;
 
-    console.log(`Calling ${modelId} model: ${providerConfig.model} via Vercel SDK`);
+    console.log(`[User: ${userId}] Calling ${modelId} model: ${providerConfig.model} via Vercel SDK`);
     const sdkStartTime = Date.now();
 
     // 6. Call AI Model via Vercel SDK (Non-Streaming only)
@@ -185,11 +173,11 @@ export async function POST(req: Request) {
       messages: messages as CoreMessage[],
     });
     const sdkDuration = Date.now() - sdkStartTime;
-    console.log(`Vercel SDK Non-streaming response received from ${modelId} in ${sdkDuration}ms`);
+    console.log(`[User: ${userId}] Vercel SDK Non-streaming response received from ${modelId} in ${sdkDuration}ms`);
     return NextResponse.json({ response: result.text });
 
   } catch (error: any) {
-    console.error('Error processing /api/ai/chat request:', error);
+    console.error(`[User: ${userId}] Error processing /api/ai/chat request:`, error);
 
     // Provide more context on the error if possible
     const errorMessage = error.message || 'Internal Server Error';
@@ -200,4 +188,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-} 
+}

@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import Navigation from './components/Navigation';
 import { Toaster } from 'react-hot-toast';
+import SupabaseProvider from '@/app/components/SupabaseProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -43,19 +44,21 @@ export default function RootLayout({
         />
       </head>
       <body className={`min-h-screen bg-gray-900 text-gray-100 ${inter.className}`}>
-        <Navigation />
-        <main className="container mx-auto px-4 md:px-8 lg:px-12 max-w-7xl">
-          {children}
-        </main>
-        <Toaster 
-          toastOptions={{
-            style: {
-              background: '#374151', // gray-700
-              color: '#F3F4F6', // gray-100
-              borderRadius: '0.375rem',
-            },
-          }}
-        />
+        <SupabaseProvider>
+          <Navigation />
+          <main className="container mx-auto px-4 md:px-8 lg:px-12 max-w-7xl">
+            {children}
+          </main>
+          <Toaster 
+            toastOptions={{
+              style: {
+                background: '#374151', // gray-700
+                color: '#F3F4F6', // gray-100
+                borderRadius: '0.375rem',
+              },
+            }}
+          />
+        </SupabaseProvider>
       </body>
     </html>
   );
