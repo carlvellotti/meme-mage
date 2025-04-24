@@ -124,3 +124,94 @@ Remember to:
 - Use consistent code formatting
 - Document new features and changes
 - Test thoroughly before deployment
+
+// --- Auth & Personas Feature Overview (Added July 2024) ---
+
+// **Goal:** Implement user accounts, allow users to define audience personas, 
+// provide feedback on meme templates per persona, and filter template 
+// suggestions based on this feedback.
+
+// **Core Components & Flow:**
+
+// 1. **Authentication:**
+//    - Handled by Supabase Auth (`@supabase/auth-helpers-nextjs`, `@supabase/auth-ui-react`).
+//    - Login/Signup UI: `src/app/auth/page.tsx`.
+//    - Middleware (`src/middleware.ts`) manages sessions.
+//    - Client/Server/Route/Middleware Supabase client helpers in `src/lib/supabase/`.
+//    - User context provided by `src/app/components/SupabaseProvider.tsx`.
+//    - API routes are protected; user ID is extracted from the session.
+
+// 2. **Personas:**
+//    - Data Model: `personas` table in Supabase (stores `user_id`, `name`, `description`). Unique constraint on `(user_id, name)`.
+//    - Management UI: `src/app/components/PersonaManager.tsx` (modal component using SWR for data fetching/mutation).
+//    - APIs: 
+//      - `src/app/api/personas/route.ts` (GET list, POST create)
+//      - `src/app/api/personas/[id]/route.ts` (PUT update, DELETE)
+//    - Integration: `src/app/components/MemeSelectorV2.tsx` uses SWR to fetch personas, displays a dropdown, and allows opening the `PersonaManager` modal.
+
+// 3. **Meme Feedback:**
+//    - Data Model: `meme_feedback` table (stores `user_id`, `persona_id`, `template_id`, `status` ENUM('used', 'dont_use')). Unique constraint on `(user_id, persona_id, template_id)`.
+//    - API: `src/app/api/feedback/route.ts` (POST for upserting feedback).
+//    - Integration: 
+//      - Feedback buttons appear in `src/app/components/MemeGenerator.tsx` after a template is selected.
+//      - Feedback buttons also appear on the template options cards in `src/app/components/MemeSelectorV2.tsx`.
+//      - Both components call the `/api/feedback` endpoint when buttons are clicked, passing the relevant IDs and status.
+
+// 4. **Template Selection & Filtering:**
+//    - Main Component: `src/app/components/MemeSelectorV2.tsx`.
+//    - User selects a Persona, optionally enters a prompt, and can toggle "Greenscreen Mode".
+//    - API Call: `handleSubmit` calls `POST /api/templates/select/route.ts`, sending `persona_id`, `prompt` (optional), and `isGreenscreenMode` (boolean).
+//    - Backend Logic (`/api/templates/select`):
+//      - Authenticates the user.
+//      - Based on whether a `prompt` exists, calls one of two Supabase RPC functions:
+//        - `match_meme_templates(embedding, threshold, count, userId, personaId, filterGreenscreen)`: If prompt exists (performs vector search).
+//        - `get_random_meme_templates(count, userId, personaId, filterGreenscreen)`: If no prompt exists.
+//    - RPC Function Logic (Defined via Migrations):
+//      - Both functions accept `user_id_param`, `persona_id_param`, and `filter_greenscreen`.
+//      - They perform a `LEFT JOIN` from `meme_templates` to `meme_feedback` ON the relevant IDs (`template_id`, `user_id`, `persona_id`).
+//      - They filter results using `WHERE meme_feedback.id IS NULL` (to exclude templates with feedback for that user/persona).
+//      - They also filter using `WHERE (filter_greenscreen IS NULL OR meme_templates.is_greenscreen = filter_greenscreen)`.
+//      - Returns the filtered list of templates.
+//    - Result Handling: Templates are returned to `MemeSelectorV2` for caption generation and display.
+
+// --- Custom Caption Rules Feature Overview (Added April 2024) ---
+
+// **Goal:** Allow users to create, save, select, view, and use custom sets of "Key Rules" for meme caption generation, replacing the default rules.
+
+// **Core Components & Flow:**
+
+// 1. **Data Model:** 
+//    - `caption_generation_rules` table in Supabase (stores `user_id`, `name`, `rules_text`). Unique constraint on `(user_id, name)`.
+
+// 2. **APIs:**
+//    - `src/app/api/caption-rules/route.ts` (GET list, POST create).
+//    - `src/app/api/caption-rules/[id]/route.ts` (PUT update, DELETE).
+//    - Both routes protected, require authentication, use Zod for validation.
+
+// 3. **Management UI:**
+//    - `src/app/components/CaptionRuleManager.tsx`: Modal component using SWR.
+//    - Allows viewing default rules (read-only).
+//    - Allows CRUD operations on user's custom rule sets.
+//    - Uses inline editing pattern (consistent with `PersonaManager`).
+
+// 4. **Integration & Prompt Construction:**
+//    - `src/app/components/MemeSelectorV2.tsx`:
+//      - Uses SWR to fetch custom rule sets.
+//      - Displays a dropdown for selecting "Default Rules" or a custom set.
+//      - Persists the last selection using `localStorage`.
+//      - Opens `CaptionRuleManager` modal.
+//      - In `generateCaptionsForAllTemplates`, retrieves the selected rule set's text.
+//    - `src/lib/utils/prompts.ts`:
+//      - `getDefaultCaptionRules()` helper function returns the default rules text.
+//      - `getCaptionGenerationTestPrompt()` modified to accept optional `rulesText`.
+//      - Constructs the final system prompt, injecting either the custom `rulesText` or the default rules into the "Key rules for captions" section.
+//      - The dynamically constructed prompt is sent to `/api/ai/chat` for caption generation.
+
+// **Key Dependencies:**
+// - `@supabase/auth-helpers-nextjs`
+// - `@supabase/auth-ui-react`
+// - `@supabase/auth-ui-shared`
+// - `@supabase/supabase-js`
+// - `swr` (for client-side data fetching - personas)
+// - `zod` (for API input validation)
+// - `react-hot-toast` (for user feedback)
