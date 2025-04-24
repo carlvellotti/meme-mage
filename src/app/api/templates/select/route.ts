@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server'; // Use server client for API routes
+import { createClient } from '@/lib/supabase/route'; // Use route handler client
 import { OpenAI } from 'openai'; // Import the class
 import { MemeTemplate } from '@/lib/supabase/types'; // Import your type
 
@@ -12,7 +12,23 @@ const TemplateSelectSchema = z.object({
   isGreenscreenMode: z.boolean().optional(),
 });
 
+// Optional: Consider Edge Runtime for performance
+// export const runtime = 'edge';
+
 export async function POST(request: Request) {
+  const supabase = createClient(); // Call helper without arguments
+
+  // --- Authentication Check --- 
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    console.warn('Unauthorized API access attempt to /api/templates/select');
+    // TODO: Log auth failure details (IP, user-agent)
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const userId = user.id; // Use userId if needed later for filtering based on user
+  // --------------------------
+
   try {
     const reqBody = await request.json();
 
@@ -27,14 +43,13 @@ export async function POST(request: Request) {
     }
 
     const { prompt, count, isGreenscreenMode } = validationResult.data;
-    const supabase = createClient();
 
     let templates: MemeTemplate[] | null = null;
     let error: any = null;
 
     if (prompt && prompt.trim().length > 0) {
       // --- Vector Search Logic ---
-      console.log(`Performing vector search for prompt: "${prompt}"`);
+      console.log(`[User: ${userId}] Performing vector search for prompt: "${prompt}"`);
       try {
         // 1. Instantiate OpenAI client (only when needed)
         const openai = new OpenAI({
@@ -55,37 +70,37 @@ export async function POST(request: Request) {
             query_embedding: embedding,
             match_threshold: 0.7, // Adjust threshold as needed
             match_count: count,
-            filter_greenscreen: isGreenscreenMode, // Pass the filter
+            filter_greenscreen: isGreenscreenMode,
           }
         );
 
         if (matchError) throw matchError;
         templates = matchedData;
-        console.log(`Found ${templates?.length ?? 0} templates via vector search.`);
+        console.log(`[User: ${userId}] Found ${templates?.length ?? 0} templates via vector search.`);
 
       } catch (e) {
-        console.error('Error during vector search:', e);
+        console.error(`[User: ${userId}] Error during vector search:`, e);
         error = e;
       }
     } else {
       // --- Random Selection Logic ---
-      console.log('Performing random template selection.');
+      console.log(`[User: ${userId}] Performing random template selection.`);
       try {
         // Call Supabase RPC function 'get_random_meme_templates'
         const { data: randomData, error: randomError } = await supabase.rpc(
           'get_random_meme_templates',
           {
             limit_count: count,
-            filter_greenscreen: isGreenscreenMode, // Pass the filter
+            filter_greenscreen: isGreenscreenMode,
           }
         );
 
         if (randomError) throw randomError;
         templates = randomData;
-        console.log(`Found ${templates?.length ?? 0} random templates.`);
+        console.log(`[User: ${userId}] Found ${templates?.length ?? 0} random templates.`);
 
       } catch (e) {
-        console.error('Error during random selection:', e);
+        console.error(`[User: ${userId}] Error during random selection:`, e);
         error = e;
       }
     }
@@ -101,8 +116,9 @@ export async function POST(request: Request) {
     // Handle case where no templates are found
     if (!templates || templates.length === 0) {
       return NextResponse.json(
-        { error: 'No matching templates found' },
-        { status: 404 }
+        // Return empty array instead of 404, as finding nothing isn't strictly an error
+        { templates: [] }, 
+        { status: 200 }
       );
     }
 
@@ -111,7 +127,7 @@ export async function POST(request: Request) {
 
   } catch (e: any) {
     // Catch errors from request parsing or unexpected issues
-    console.error('Unexpected Error in /api/templates/select:', e);
+    console.error(`[User: ${userId}] Unexpected Error in /api/templates/select:`, e);
     return NextResponse.json(
       { error: 'An unexpected error occurred', details: e.message },
       { status: 500 }

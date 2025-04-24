@@ -53,25 +53,7 @@ This is a Next.js 14 application with multiple AI integrations, designed as a te
 
 ## Current Features
 
-### 1. AI Chat Integration
-- Supports both OpenAI and Anthropic models
-- Streaming responses using Vercel AI SDK
-- Model selection toggle
-- Chat history management
-
-### 2. Image Generation
-- Replicate API integration for Stable Diffusion
-- Image download functionality
-- Gallery of generated images
-- Advanced generation options
-
-### 3. Voice Notes
-- Real-time voice recording with Deepgram
-- Automatic transcription
-- Supabase storage integration
-- Note management system
-
-### 4. Meme Mage
+### 1. Meme Mage
 - AI-powered template selection
 - Caption generation
 - Video processing with canvas
