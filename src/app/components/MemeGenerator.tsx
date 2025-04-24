@@ -1055,6 +1055,30 @@ export default function MemeGenerator({
                     </div>
                   )}
                 </div>
+
+                {/* <<< Feedback Buttons >>> - MOVED HERE */}
+                {personaId && selectedTemplate && (
+                  <div className="mt-2 pt-4 border-t border-gray-600 space-x-2 flex justify-center">
+                    <button
+                      onClick={() => handleFeedback('used')}
+                      disabled={isFeedbackLoading}
+                      className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      title="Mark this template as used/good for the selected persona"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      Used
+                    </button>
+                    <button
+                      onClick={() => handleFeedback('dont_use')}
+                      disabled={isFeedbackLoading}
+                      className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      title="Mark this template as bad/don't use for the selected persona"
+                    >
+                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      Don't Use
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="w-full lg:w-1/2">
@@ -1135,30 +1159,6 @@ export default function MemeGenerator({
                       </div>
                     </div>
                   </>
-                )}
-
-                {/* <<< Feedback Buttons >>> */}
-                {personaId && selectedTemplate && (
-                  <div className="mt-4 pt-4 border-t border-gray-700 space-x-2 flex justify-center">
-                    <button
-                      onClick={() => handleFeedback('used')}
-                      disabled={isFeedbackLoading}
-                      className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                      title="Mark this template as used/good for the selected persona"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                      Used
-                    </button>
-                    <button
-                      onClick={() => handleFeedback('dont_use')}
-                      disabled={isFeedbackLoading}
-                      className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                      title="Mark this template as bad/don't use for the selected persona"
-                    >
-                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      Don't Use
-                    </button>
-                  </div>
                 )}
               </div>
             </div>

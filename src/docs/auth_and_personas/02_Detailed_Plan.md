@@ -204,38 +204,42 @@ This document provides detailed technical specifications for each chunk outlined
 
 **Completion Checks:**
 
-*   [ ] SWR (or similar) installed and configured.
-*   [ ] `PersonaManager` modal component created, displays list, handles add/edit/delete using SWR.
-*   [ ] `MemeSelectorV2` uses SWR, populates dropdown, handles zero-persona state.
-*   [ ] \"Manage Personas\" button in `MemeSelectorV2` opens the `PersonaManager` modal.
-*   [ ] `MemeSelectorV2` requires persona, passes `personaId` prop.
-*   [ ] `MemeGenerator` accepts `personaId`, renders feedback buttons, handles loading state, calls API.
+*   [X] SWR (or similar) installed and configured.
+*   [X] `PersonaManager` modal component created, displays list, handles add/edit/delete using SWR.
+*   [X] `MemeSelectorV2` uses SWR, populates dropdown, handles zero-persona state.
+*   [X] "Manage Personas" button in `MemeSelectorV2` opens the `PersonaManager` modal.
+*   [X] `MemeSelectorV2` requires persona, passes `personaId` prop.
+*   [X] `MemeGenerator` accepts `personaId`, renders feedback buttons, handles loading state, calls API.
+*   [X] Feedback buttons added to Options cards in `MemeSelectorV2`.
 
 ---
 
 ## Chunk 4: Template Filtering Update
 
-**Goal:** Modify template selection RPC to exclude templates based on feedback.
+**Goal:** Modify template selection RPC to exclude templates based on feedback and optionally filter by greenscreen.
 
 **Detailed Steps & Pseudocode:**
 
 1.  **Modify/Create Supabase RPC Functions (via Migration):**
     *   Update existing RPCs (`match_meme_templates`, `get_random_meme_templates`).
-    *   Add `user_id_param UUID`, `persona_id_param UUID` parameters.
+    *   Add `user_id_param UUID`, `persona_id_param UUID`, `filter_greenscreen BOOLEAN` parameters.
     *   Add `LEFT JOIN meme_feedback ... WHERE mf.id IS NULL` logic.
+    *   Add `AND (filter_greenscreen IS NULL OR mt.is_greenscreen = filter_greenscreen)` logic to WHERE clause.
         ```sql
         -- Example structure for match_meme_templates
-        CREATE OR REPLACE FUNCTION match_meme_templates(...) RETURNS TABLE (...) LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT mt.* FROM meme_templates mt LEFT JOIN meme_feedback mf ON mt.id = mf.template_id AND mf.user_id = user_id_param AND mf.persona_id = persona_id_param WHERE mt.embedding <#> query_embedding < -match_threshold AND mf.id IS NULL ORDER BY ... LIMIT ...; END; $$;
+        CREATE OR REPLACE FUNCTION match_meme_templates(query_embedding vector(1536), match_threshold double precision, limit_count integer, user_id_param uuid, persona_id_param uuid, filter_greenscreen boolean) RETURNS TABLE(...) LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT mt.* FROM meme_templates mt LEFT JOIN meme_feedback mf ON mt.id = mf.template_id AND mf.user_id = user_id_param AND mf.persona_id = persona_id_param WHERE mt.embedding <#> query_embedding < -match_threshold AND mf.id IS NULL AND (filter_greenscreen IS NULL OR mt.is_greenscreen = filter_greenscreen) ORDER BY ... LIMIT ...; END; $$;
         ```
     *   Apply migration: `supabase db push`.
 2.  **Modify `/api/templates/select/route.ts`:**
-    *   Check Auth (`userId`), validate body (optional `persona_id`).
-    *   Call the **modified** RPC function with `userId` and `persona_id` (or `null`).
+    *   Check Auth (`userId`), validate body (optional `persona_id`, optional `isGreenscreenMode`).
+    *   Call the **modified** RPC function with `userId`, `persona_id` (or `null`), and `isGreenscreenMode` (or `null`).
         ```typescript
-        const { prompt, count = 3, persona_id } = validatedBody.data;
+        const { prompt, count = 3, persona_id, isGreenscreenMode } = validatedBody.data;
         // ... generate embedding ...
         const rpcName = prompt ? 'match_meme_templates' : 'get_random_meme_templates';
-        const rpcParams = prompt ? { /* ... */ user_id_param: userId, persona_id_param: persona_id || null } : { /* ... */ user_id_param: userId, persona_id_param: persona_id || null };
+        const rpcParams = prompt 
+          ? { /* ... embedding, threshold, count ... */ user_id_param: userId, persona_id_param: persona_id || null, filter_greenscreen: isGreenscreenMode ?? null } 
+          : { /* ... count ... */ user_id_param: userId, persona_id_param: persona_id || null, filter_greenscreen: isGreenscreenMode ?? null };
         const { data, error } = await supabase.rpc(rpcName, rpcParams);
         // Handle shortfall if needed
         return Response.json({ templates: data || [] });
@@ -243,12 +247,14 @@ This document provides detailed technical specifications for each chunk outlined
 
 **Completion Checks:**
 
-*   [ ] Migration created for RPC function updates (JOIN and WHERE clause).
-*   [ ] Migration applied successfully.
-*   [ ] `/api/templates/select` validates optional `persona_id`.
-*   [ ] API calls the correct RPC with `userId` and `persona_id` (or `null`).
-*   [ ] Logic/consideration added for handling template count shortfalls.
-*   [ ] End-to-end test confirms filtering works per persona.
+*   [X] Migration created for RPC function updates (JOIN, WHERE clause, greenscreen param).
+*   [X] Migration applied successfully.
+*   [X] `/api/templates/select` validates optional `persona_id` and `isGreenscreenMode`.
+*   [X] API calls the correct RPC with `userId`, `persona_id` (or `null`), and `filter_greenscreen`.
+*   [X] Logic/consideration added for handling template count shortfalls.
+*   [X] End-to-end test confirms filtering works per persona.
+*   [X] Greenscreen mode toggle added to frontend (`MemeSelectorV2`).
+*   [X] Greenscreen mode state passed to API and handled by RPC.
 
 ---
 

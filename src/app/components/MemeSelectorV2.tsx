@@ -73,6 +73,7 @@ export default function MemeSelectorV2() {
   // --- State Variables --- 
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(''); // Store selected persona ID
   const [userPrompt, setUserPrompt] = useState<string>(''); // Optional prompt
+  const [isGreenscreenMode, setIsGreenscreenMode] = useState<boolean>(false); // Greenscreen mode state
   const [isLoadingTemplates, setIsLoadingTemplates] = useState<boolean>(false);
   const [isLoadingCaptions, setIsLoadingCaptions] = useState<boolean>(false);
   const [fetchedTemplates, setFetchedTemplates] = useState<MemeTemplate[] | null>(null);
@@ -84,6 +85,9 @@ export default function MemeSelectorV2() {
   
   // State for Persona Manager Modal
   const [isPersonaModalOpen, setIsPersonaModalOpen] = useState(false);
+
+  // State to track loading for feedback from options cards
+  const [optionFeedbackLoading, setOptionFeedbackLoading] = useState<Record<string, boolean>>({});
 
   // --- Data Fetching with SWR --- 
   const { 
@@ -213,6 +217,41 @@ export default function MemeSelectorV2() {
     setIsLoadingCaptions(false);
   };
 
+  // <<< New Feedback Handler for Options Cards >>>
+  const handleFeedbackFromOptions = async (templateId: string, status: 'used' | 'dont_use') => {
+    if (!selectedPersonaId) {
+      toast.error('Please select a persona before providing feedback.');
+      return;
+    }
+    
+    setOptionFeedbackLoading(prev => ({ ...prev, [templateId]: true }));
+    const toastId = toast.loading('Saving feedback...');
+
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          template_id: templateId, 
+          persona_id: selectedPersonaId, 
+          status 
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to save feedback');
+
+      toast.success(`Feedback saved!`, { id: toastId });
+      // Optionally, update UI within the card to show feedback was given
+
+    } catch (err: any) {
+      console.error("Feedback Error from Options:", err);
+      toast.error(err.message || 'Could not save feedback.', { id: toastId });
+    } finally {
+      setOptionFeedbackLoading(prev => ({ ...prev, [templateId]: false }));
+    }
+  };
+
   // --- Event Handlers --- 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,7 +274,8 @@ export default function MemeSelectorV2() {
     const requestBody = {
       count: 3,
       prompt: userPrompt.trim() || undefined,
-      persona_id: selectedPersonaId // Include selected persona ID
+      persona_id: selectedPersonaId,
+      isGreenscreenMode: isGreenscreenMode,
     };
     
     try {
@@ -363,6 +403,19 @@ export default function MemeSelectorV2() {
               <p className="text-xs text-gray-400 mt-1">Leave blank for random templates.</p>
             </div>
 
+            {/* Greenscreen Mode Toggle */}
+            <div className="flex items-center justify-start pt-5 sm:pt-0"> {/* Adjust padding for alignment */}
+              <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isGreenscreenMode}
+                  onChange={() => setIsGreenscreenMode(!isGreenscreenMode)}
+                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                />
+                <span>Greenscreen Mode</span>
+              </label>
+            </div>
+
             {/* Submit Button */} 
             <button
               type="submit"
@@ -431,6 +484,29 @@ export default function MemeSelectorV2() {
                     </div>
                   ))}
                 </div>
+                {/* <<< Feedback Buttons for Options Card >>> */} 
+                {selectedPersonaId && (
+                  <div className="mb-3 pt-2 border-t border-gray-700 space-x-2 flex justify-center">
+                    <button
+                      onClick={() => handleFeedbackFromOptions(option.template.id, 'used')}
+                      disabled={optionFeedbackLoading[option.template.id]}
+                      className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      title="Mark this template as used/good for the selected persona"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      Used
+                    </button>
+                    <button
+                      onClick={() => handleFeedbackFromOptions(option.template.id, 'dont_use')}
+                      disabled={optionFeedbackLoading[option.template.id]}
+                      className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      title="Mark this template as bad/don't use for the selected persona"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      Don't Use
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

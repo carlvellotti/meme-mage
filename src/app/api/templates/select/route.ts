@@ -10,6 +10,7 @@ const TemplateSelectSchema = z.object({
   audience: z.string().optional(), // Currently unused in logic, but good to validate
   count: z.number().int().positive().max(10).default(3), // Default to 3, max 10
   isGreenscreenMode: z.boolean().optional(),
+  persona_id: z.string().uuid().optional().nullable(), // <<< Added persona_id
 });
 
 // Optional: Consider Edge Runtime for performance
@@ -42,14 +43,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const { prompt, count, isGreenscreenMode } = validationResult.data;
+    const { prompt, count, isGreenscreenMode, persona_id } = validationResult.data;
 
     let templates: MemeTemplate[] | null = null;
     let error: any = null;
+    let rpcParams: any;
 
     if (prompt && prompt.trim().length > 0) {
       // --- Vector Search Logic ---
-      console.log(`[User: ${userId}] Performing vector search for prompt: "${prompt}"`);
+      console.log(`[User: ${userId}] Performing vector search for prompt: "${prompt}", Persona: ${persona_id || 'None'}`);
       try {
         // 1. Instantiate OpenAI client (only when needed)
         const openai = new OpenAI({
@@ -64,14 +66,18 @@ export async function POST(request: Request) {
         const embedding = embeddingResponse.data[0].embedding;
 
         // 2. Call Supabase RPC function 'match_meme_templates'
+        rpcParams = {
+          query_embedding: embedding,
+          match_threshold: 0.7, // Adjust threshold as needed
+          match_count: count,
+          filter_greenscreen: isGreenscreenMode,
+          user_id_param: userId,          // Pass user ID
+          persona_id_param: persona_id    // Pass persona ID (can be null)
+        };
+
         const { data: matchedData, error: matchError } = await supabase.rpc(
           'match_meme_templates',
-          {
-            query_embedding: embedding,
-            match_threshold: 0.7, // Adjust threshold as needed
-            match_count: count,
-            filter_greenscreen: isGreenscreenMode,
-          }
+          rpcParams
         );
 
         if (matchError) throw matchError;
@@ -84,15 +90,20 @@ export async function POST(request: Request) {
       }
     } else {
       // --- Random Selection Logic ---
-      console.log(`[User: ${userId}] Performing random template selection.`);
+      console.log(`[User: ${userId}] Performing random template selection. Persona: ${persona_id || 'None'}`);
       try {
-        // Call Supabase RPC function 'get_random_meme_templates'
+        // Ensure all parameters expected by the SQL function are included here
+        // and match the order suggested by the error hint.
+        rpcParams = {
+          filter_greenscreen: isGreenscreenMode ?? null, // Default to null if undefined
+          limit_count: count, 
+          user_id_param: userId,         
+          persona_id_param: persona_id   
+        };
+        
         const { data: randomData, error: randomError } = await supabase.rpc(
           'get_random_meme_templates',
-          {
-            limit_count: count,
-            filter_greenscreen: isGreenscreenMode,
-          }
+          rpcParams
         );
 
         if (randomError) throw randomError;

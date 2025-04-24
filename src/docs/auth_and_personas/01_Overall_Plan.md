@@ -41,6 +41,7 @@ This project will be completed sequentially in the following chunks:
 4.  **Chunk 4: Template Filtering Update**
     *   Modify `/api/templates/select` to accept `persona_id`.
     *   Update/Create Supabase RPC functions (`match_meme_templates`, `get_random_meme_templates`) via migrations to perform filtering (`LEFT JOIN ... WHERE feedback.id IS NULL`).
+    *   Add `is_greenscreen` filtering to RPC functions and frontend toggle.
     *   Call appropriate RPC from the API route, passing `userId` and `persona_id`.
     *   Add logic to handle potential result shortfalls if a strict count is needed.
 
