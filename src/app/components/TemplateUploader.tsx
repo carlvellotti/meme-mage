@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import { toast } from 'react-hot-toast'
+import { MemeTemplate } from '@/lib/supabase/types'
+import { v4 as uuidv4 } from 'uuid'
 
 // Define the UnprocessedTemplate type (or import if defined elsewhere)
 interface UnprocessedTemplate {
@@ -27,6 +29,7 @@ export function TemplateUploader({
   initialSourceUrl,
   onTemplateUploaded
 }: TemplateUploaderProps) {
+  const supabase = createClient()
   const [templateName, setTemplateName] = useState('')
   const [templateExplanation, setTemplateExplanation] = useState('')
   const [uploaderName, setUploaderName] = useState('')
