@@ -128,34 +128,54 @@ const VideoPreviewCropModal: React.FC<VideoPreviewCropModalProps> = ({
 
   // --- Updated Start Crop Handler ---
   const handleStartCrop = () => {
-    if (!videoRef.current || !videoDimensions) {
+    if (!videoRef.current || !videoDimensions) { 
       toast.error("Video data not loaded yet.");
       return;
     }
     console.log('Start Crop clicked');
     if (captureFrame()) {
       setIsCropping(true);
-      // Initialize crop to cover the whole image
-      setCrop({
-        unit: '%', // Use percentage units for full coverage
-        x: 0,
-        y: 0,
-        width: 100,
-        height: 100,
-      });
     } else {
       toast.error("Failed to capture video frame.");
     }
   };
 
   // Handler for when the image in the cropper loads
-  // Useful if the displayed image size differs from natural size
-  // function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
-  //   if (videoDimensions) {
-  //     const { width, height } = videoDimensions;
-  //     setCrop(centerAspectCrop(width, height));
-  //   }
-  // }
+  // Set the initial crop box here when entering crop mode
+  function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+     const imageElement = e.currentTarget;
+     console.log("Preview image loaded, natural dims:", imageElement.naturalWidth, imageElement.naturalHeight);
+     
+     // If we are in cropping mode and the crop hasn't been set yet (or needs reset),
+     // set the initial crop to cover the full image.
+     if (isCropping) { // Check if we are in cropping mode
+       // Ensure dimensions are valid before setting
+       if (imageElement.naturalWidth > 0 && imageElement.naturalHeight > 0) {
+           console.log("onImageLoad: Setting initial crop.");
+           setCrop({
+              unit: 'px',
+              x: 0,
+              y: 0,
+              width: imageElement.naturalWidth,
+              height: imageElement.naturalHeight,
+          });
+       } else {
+           console.warn("onImageLoad: Image loaded but natural dimensions are zero.");
+       }
+     }
+     // The code below was commented out previously, keep it that way or remove if not needed
+     // // If we are already in cropping mode when image loads, reset crop
+     // // This covers edge cases where frame capture finishes after mode starts
+     // if (isCropping && e.currentTarget) {
+     //   setCrop({
+     //       unit: 'px',
+     //       x: 0,
+     //       y: 0,
+     //       width: e.currentTarget.naturalWidth,
+     //       height: e.currentTarget.naturalHeight,
+     //   });
+     // }
+  }
 
   const handleCancelCrop = () => {
     setIsCropping(false);
@@ -180,33 +200,30 @@ const VideoPreviewCropModal: React.FC<VideoPreviewCropModalProps> = ({
     setIsProcessing(true);
 
     // --- Coordinate Translation ---
-    // react-image-crop gives pixel values based on the displayed image size.
-    // We need to scale these to the video's natural dimensions.
-    const imageElement = imgRef.current;
-    const scaleX = videoDimensions.width / imageElement.naturalWidth;
-    const scaleY = videoDimensions.height / imageElement.naturalHeight;
-
+    // react-image-crop now gives pixel values based on the natural image size.
+    // The captured frame's natural size SHOULD match the video's natural size.
+    // Therefore, no scaling is needed.
     const finalCrop = {
-        x: Math.round(crop.x * scaleX),
-        y: Math.round(crop.y * scaleY),
-        width: Math.round(crop.width * scaleX),
-        height: Math.round(crop.height * scaleY),
+      x: Math.round(crop.x),
+      y: Math.round(crop.y),
+      width: Math.round(crop.width),
+      height: Math.round(crop.height),
     };
 
     console.log('Original crop (px): ', crop);
     console.log('Video dimensions: ', videoDimensions);
-    console.log('Image natural dims: ', { w: imageElement.naturalWidth, h: imageElement.naturalHeight});
-    console.log('Calculated scales: ', { scaleX, scaleY });
-    console.log('Final calculated crop for API: ', finalCrop);
+    // console.log('Image natural dims: ', { w: imageElement.naturalWidth, h: imageElement.naturalHeight});
+    // console.log('Calculated scales: ', { scaleX, scaleY });
+    console.log('Final crop payload for API (pixels, no scaling): ', finalCrop);
 
-    // Sanity check the final coordinates
+    // Sanity check the final coordinates (using videoDimensions as the source of truth)
     if (finalCrop.x < 0 || finalCrop.y < 0 || finalCrop.width <= 0 || finalCrop.height <= 0 ||
         finalCrop.x + finalCrop.width > videoDimensions.width + 1 || // Add tolerance
-        finalCrop.y + finalCrop.height > videoDimensions.height + 1) { 
-        console.error("Calculated crop coordinates are invalid or out of bounds: ", finalCrop);
-        toast.error("Crop calculation error. Please try adjusting the selection.");
-        setIsProcessing(false);
-        return;
+        finalCrop.y + finalCrop.height > videoDimensions.height + 1) {
+      console.error("Crop coordinates are invalid or out of bounds: ", finalCrop, "against video dims:", videoDimensions);
+      toast.error("Crop selection is invalid or out of bounds.");
+      setIsProcessing(false);
+      return;
     }
 
 
@@ -344,6 +361,7 @@ const VideoPreviewCropModal: React.FC<VideoPreviewCropModalProps> = ({
                         src={imageSrc} 
                         alt="Video Frame" 
                         style={{ display: 'block' }} 
+                        onLoad={onImageLoad}
                       />
                     </ReactCrop>
                   )}

@@ -292,35 +292,60 @@ export async function POST(
     console.log(`[API /templates/${templateId}/crop] Actual dimensions: ${actualDims.width}x${actualDims.height}`);
 
     // --- Calculate Final Crop Parameters --- 
-    // Use x, y from payload, but recalculate width/height based on actual dims
-    // For this specific request (crop bottom 30px):
-    // We assume the user *intended* x=0, y=0 and a height reduction
-    // The payload width/height are ignored in this calculation
-    const cropX = payload.x; // Use user-provided X offset
-    const cropY = payload.y; // Use user-provided Y offset
-    const cropAmountBottom = 30; // Specific to this request
-    const finalCropWidth = actualDims.width - cropX;
-    const finalCropHeight = actualDims.height - cropY - cropAmountBottom; // Adjust height based on Y offset and bottom crop
+    // --- REMOVE THIS WHOLE SECTION ---
+    // // Use x, y from payload, but recalculate width/height based on actual dims
+    // // For this specific request (crop bottom 30px):
+    // // We assume the user *intended* x=0, y=0 and a height reduction
+    // // The payload width/height are ignored in this calculation
+    // const cropX = payload.x; // Use user-provided X offset
+    // const cropY = payload.y; // Use user-provided Y offset
+    // const cropAmountBottom = 30; // Specific to this request
+    // const finalCropWidth = actualDims.width - cropX;
+    // const finalCropHeight = actualDims.height - cropY - cropAmountBottom; // Adjust height based on Y offset and bottom crop
+    // 
+    // // Validate calculated dimensions
+    // if (cropX < 0 || cropY < 0 || finalCropWidth <= 0 || finalCropHeight <= 0) {
+    //   throw new Error(`Invalid crop parameters after calculation: x=${cropX}, y=${cropY}, width=${finalCropWidth}, height=${finalCropHeight}. Original dims: ${actualDims.width}x${actualDims.height}`);
+    // }
+    // if (cropX + finalCropWidth > actualDims.width || cropY + finalCropHeight > actualDims.height) {
+    //     throw new Error(`Calculated crop area exceeds video dimensions. Crop: x=${cropX}, y=${cropY}, w=${finalCropWidth}, h=${finalCropHeight}. Video: ${actualDims.width}x${actualDims.height}`);
+    // }
+    // 
+    // const finalCropPayload: CropPayload = {
+    //     x: cropX,
+    //     y: cropY,
+    //     width: finalCropWidth,
+    //     height: finalCropHeight
+    // };
+    // --- END REMOVE SECTION ---
 
-    // Validate calculated dimensions
-    if (cropX < 0 || cropY < 0 || finalCropWidth <= 0 || finalCropHeight <= 0) {
-      throw new Error(`Invalid crop parameters after calculation: x=${cropX}, y=${cropY}, width=${finalCropWidth}, height=${finalCropHeight}. Original dims: ${actualDims.width}x${actualDims.height}`);
-    }
-    if (cropX + finalCropWidth > actualDims.width || cropY + finalCropHeight > actualDims.height) {
-        throw new Error(`Calculated crop area exceeds video dimensions. Crop: x=${cropX}, y=${cropY}, w=${finalCropWidth}, h=${finalCropHeight}. Video: ${actualDims.width}x${actualDims.height}`);
-    }
-    
-    const finalCropPayload: CropPayload = {
-        x: cropX,
-        y: cropY,
-        width: finalCropWidth,
-        height: finalCropHeight
+    // --- NEW: Clamp received payload to video bounds --- 
+    const final: CropPayload = {
+      x: Math.max(0,               Math.min(payload.x,      actualDims.width  - 2)),
+      y: Math.max(0,               Math.min(payload.y,      actualDims.height - 2)),
+      width:  Math.max(2,
+              Math.min(payload.width,  actualDims.width  - payload.x)), // Use payload.x here
+      height: Math.max(2,
+              Math.min(payload.height, actualDims.height - payload.y)), // Use payload.y here
     };
-    console.log(`[API /templates/${templateId}/crop] Calculated final crop payload:`, finalCropPayload);
 
-    // 3. Execute FFmpeg Crop using calculated payload
+    // force even numbers so H.264 is happy
+    final.width  &= ~1;
+    final.height &= ~1;
+
+    console.log(`[API /templates/${templateId}/crop] Clamped final crop payload:`, final);
+
+    // Validate clamped dimensions just in case
+    if (final.width <= 0 || final.height <= 0 || 
+        final.x + final.width > actualDims.width || 
+        final.y + final.height > actualDims.height) {
+      console.error('Clamped crop dimensions are invalid:', final, 'against actual:', actualDims);
+      throw new Error('Invalid crop parameters after clamping.');
+    }
+
+    // 3. Execute FFmpeg Crop using clamped payload
     console.log(`[API /templates/${templateId}/crop] Executing FFmpeg crop...`);
-    await runFFmpegCrop(inputPath, outputPath, finalCropPayload); // Use finalCropPayload
+    await runFFmpegCrop(inputPath, outputPath, final); // Use clamped final payload
     console.log(`[API /templates/${templateId}/crop] FFmpeg processing completed successfully.`);
 
     // Check if output file exists (sanity check)
@@ -331,13 +356,22 @@ export async function POST(
         throw new Error('FFmpeg completed but output file is missing or unreadable.');
     }
 
-    // 4. Upload Cropped Video back to Supabase Storage (Overwrite) using ENCODED path
-    console.log(`[API /templates/${templateId}/crop] Uploading cropped video using encoded path: ${storageDetails.encodedPath}`);
+    // 4. Upload Cropped Video back to Supabase Storage (DO NOT Overwrite) using ENCODED path
+    const parsedPath = path.parse(storageDetails.encodedPath);
+    // Decode the filename part ONLY for appending _cropped, keep directory encoded
+    const decodedName = decodeURIComponent(parsedPath.name);
+    const newName = `${decodedName}_cropped`;
+    // Re-encode the modified name part
+    const encodedNewName = encodeURIComponent(newName);
+    // Construct the new key, keeping the original directory structure (which might also be encoded)
+    const newKey = path.join(parsedPath.dir, `${encodedNewName}${parsedPath.ext}`).replace(/\\/g, '/'); // Use path.join and replace backslashes
+
+    console.log(`[API /templates/${templateId}/crop] Uploading cropped video to new key: ${newKey}`);
     const croppedVideoBuffer = await fs.readFile(outputPath);
     const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from(storageDetails.bucket)
-      .upload(storageDetails.encodedPath, croppedVideoBuffer, { // Use encodedPath
-        upsert: true,
+      .upload(newKey, croppedVideoBuffer, { // Use NEW key
+        upsert: false, // Do not upsert, should be a new file
         contentType: 'video/mp4',
       });
 
@@ -348,7 +382,7 @@ export async function POST(
     console.log(`[API /templates/${templateId}/crop] Video uploaded successfully. Upload path reported: ${uploadData?.path}`);
 
     // --- Manually Construct Public URL --- 
-    console.log(`[API /templates/${templateId}/crop] Manually constructing public URL...`);
+    console.log(`[API /templates/${templateId}/crop] Manually constructing public URL for new key...`);
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (!supabaseUrl) {
         const errorMsg = `[API /templates/${templateId}/crop] Error: NEXT_PUBLIC_SUPABASE_URL environment variable is not set.`;
@@ -356,12 +390,12 @@ export async function POST(
         throw new Error('Server configuration error: Missing Supabase URL.');
     }
     
-    // Construct the base URL
-    const baseUrl = `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${storageDetails.bucket}/${storageDetails.encodedPath}`;
+    // Construct the base URL using the NEW key
+    const baseUrl = `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${storageDetails.bucket}/${newKey}`;
     // Add cache-busting timestamp
     const cacheBuster = `?t=${Date.now()}`;
     const newVideoUrl = `${baseUrl}${cacheBuster}`;
-    console.log(`[API /templates/${templateId}/crop] Manually constructed public URL with cache buster: ${newVideoUrl}`);
+    console.log(`[API /templates/${templateId}/crop] Manually constructed public URL for new cropped video: ${newVideoUrl}`);
     
     // 5. Update Database Record
     console.log(`[API /templates/${templateId}/crop] Updating database record with URL: ${newVideoUrl}`);
