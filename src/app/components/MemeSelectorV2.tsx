@@ -170,17 +170,29 @@ export default function MemeSelectorV2() {
     setIsLoadingCaptions(true);
     setMemeOptions(null); // Clear old options
 
-    // Find selected persona's name for the prompt context
+    // Find selected persona's name and description for the prompt context
     const selectedPersona = personas?.find(p => p.id === selectedPersonaId);
-    const audienceContext = selectedPersona ? selectedPersona.name : "general audience"; // Fallback
+    const audienceName = selectedPersona ? selectedPersona.name : "general audience"; // Fallback name
+    const audienceDescription = selectedPersona ? selectedPersona.description : null; // Description or null
     
     // --- Determine the rules text to use --- 
     const selectedRuleSet = captionRuleSets?.find(rule => rule.id === selectedRuleSetId);
     const customRulesText = selectedRuleSet?.rules_text; // Will be undefined if default ('') is selected
     
-    // --- Get System Prompt using the determined rules --- 
-    const systemPrompt = getCaptionGenerationTestPrompt(audienceContext, customRulesText);
+    // --- Get System Prompt using the determined rules and audience details --- 
+    const systemPrompt = getCaptionGenerationTestPrompt(audienceName, audienceDescription, customRulesText);
     // -----------------------------------------------------
+
+    // <<< Add Detailed Logging Here >>>
+    console.log(`--- Generating Captions ---`);
+    console.log(`Template: ${templates[0].name} (ID: ${templates[0].id})`); // Log the first template name for context
+    console.log(`Model: ${'anthropic-3.5'}`); // Log the first model for context
+    console.log(`Audience Name: ${audienceName}`);
+    console.log(`Audience Description: ${audienceDescription || '(None provided)'}`);
+    console.log(`Custom Rules Text Used:`, customRulesText || '(Default Rules)'); 
+    console.log(`System Prompt (Start): ${systemPrompt.substring(0, 300)}...`); 
+    console.log(`System Prompt (End): ...${systemPrompt.substring(systemPrompt.length - 300)}`); 
+    // console.log("Full System Prompt:", systemPrompt); // Uncomment if full prompt needed
 
     const models = [
       'anthropic-3.5',
@@ -404,14 +416,19 @@ export default function MemeSelectorV2() {
 
   // Render MemeGenerator when template and caption are selected
   if (selectedFinalTemplate && selectedFinalCaption) {
+    // Get the selected persona name again for passing to the generator
+    const selectedPersona = personas?.find(p => p.id === selectedPersonaId);
+    const personaNameToPass = selectedPersona ? selectedPersona.name : null;
+
     return (
       <MemeGenerator
         initialTemplate={selectedFinalTemplate}
         initialCaption={selectedFinalCaption}
         initialOptions={convertToSelectedMemeFormat(memeOptions)}
-        isGreenscreenMode={isGreenscreenMode} // Pass the mode state
-        onToggleMode={() => setIsGreenscreenMode(!isGreenscreenMode)} // Pass toggle handler
-        personaId={selectedPersonaId} // Pass selected persona ID
+        isGreenscreenMode={isGreenscreenMode} 
+        onToggleMode={() => setIsGreenscreenMode(!isGreenscreenMode)} 
+        personaId={selectedPersonaId} // Keep passing ID for feedback etc.
+        personaName={personaNameToPass} // Pass the name for the filename
         onBack={() => {
           setSelectedFinalTemplate(null);
           setSelectedFinalCaption(null);
