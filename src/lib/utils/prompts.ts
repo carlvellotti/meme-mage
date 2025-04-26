@@ -193,23 +193,25 @@ Always format as MARKDOWN.`;
 
 /**
  * Generates the system prompt for caption generation, optionally using custom rules.
- * @param audience The target audience name.
+ * @param audienceName The target audience name.
+ * @param audienceDescription Optional description of the target audience/persona.
  * @param rulesText Optional string containing custom key rules.
  * @returns The complete system prompt string.
  */
 export const getCaptionGenerationTestPrompt = (
-  audience: string,
-  rulesText?: string | null // Optional custom rules text
+  audienceName: string,
+  audienceDescription?: string | null, // Added description parameter
+  rulesText?: string | null 
 ): string => {
   // Use the helper to get default rules
   const defaultRules = getDefaultCaptionRules();
   // Use provided rules if they exist and are not empty, otherwise use default
   const finalRules = rulesText?.trim() ? rulesText.trim() : defaultRules;
 
-  // Construct the final prompt using the determined rules
+  // Construct the final prompt using the determined rules and audience details
   return `You are an expert meme caption generator. You will receive:
 1. A user's concept/joke idea
-2. Target audience (${audience})
+2. Target audience: ${audienceName}${audienceDescription ? ` (Description: ${audienceDescription})` : ''} 
 3. A description of ONE specific meme template
 
 Your job is to generate FIVE distinct, punchy meme captions for the provided template that fit the user's concept and audience.

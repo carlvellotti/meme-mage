@@ -39,6 +39,7 @@ interface MemeGeneratorProps {
   initialOptions?: SelectedMeme;
   onBack?: () => void;
   personaId?: string | null;
+  personaName?: string | null;
 }
 
 // Add this interface near the top with other interfaces
@@ -69,6 +70,16 @@ interface UnsplashImage {
   };
 }
 
+// Helper function to sanitize filenames
+function sanitizeFilename(name: string): string {
+  // Replace common problematic characters with underscores
+  let sanitized = name.replace(/[@\/:*?"<>|\s]/g, '_');
+  // Remove any leading/trailing underscores that might result
+  sanitized = sanitized.replace(/^_+|_+$/g, '');
+  // Limit length (optional, but good practice)
+  return sanitized.substring(0, 50); 
+}
+
 export default function MemeGenerator({ 
   isGreenscreenMode, 
   onToggleMode, 
@@ -76,7 +87,8 @@ export default function MemeGenerator({
   initialCaption, 
   initialOptions,
   onBack,
-  personaId
+  personaId,
+  personaName
 }: MemeGeneratorProps) {
   // Create Supabase client instance
   const supabase = createClient();
@@ -289,17 +301,14 @@ export default function MemeGenerator({
   };
 
   const handleDownloadMeme = async () => {
-    if (!selectedTemplate || !caption.trim()) {
-      toast.error('Please provide a caption for your meme');
-      return;
-    }
-
-    if (isGreenscreenMode && !selectedBackground) {
-      toast.error('Please select a background image');
+    if (!selectedTemplate || !caption) {
+      toast.error("Please select a template and add a caption first.");
       return;
     }
 
     setIsDownloading(true);
+    toast.loading("Brewing your meme... this might take a moment!", { id: 'download-toast' });
+
     try {
       const videoBlob = await createMemeVideo(
         selectedTemplate.video_url,
@@ -312,20 +321,27 @@ export default function MemeGenerator({
         isCropped
       );
 
-      // Create download link and trigger download immediately
+      // Construct the filename
+      const timestamp = Date.now();
+      const safePersonaName = personaName ? sanitizeFilename(personaName) : null;
+      const filename = safePersonaName 
+        ? `${safePersonaName}-meme-${timestamp}.mp4`
+        : `meme-${timestamp}.mp4`;
+
+      // Create a link and trigger download
       const url = URL.createObjectURL(videoBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `meme-${Date.now()}.mp4`;
+      a.download = filename; // Use the new filename
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success('Meme downloaded successfully!');
+      toast.success("Meme downloaded!", { id: 'download-toast' });
     } catch (error) {
-      console.error('Error downloading meme:', error);
-      toast.error('Failed to download meme. Please try again.');
+      console.error('Error generating or downloading meme:', error);
+      toast.error("Oops! Couldn't generate the meme. Please try again.", { id: 'download-toast' });
     } finally {
       setIsDownloading(false);
     }
