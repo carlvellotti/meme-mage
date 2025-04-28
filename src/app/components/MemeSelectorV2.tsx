@@ -8,6 +8,7 @@ import { getCaptionGenerationTestPrompt } from "@/lib/utils/prompts";
 import toast from 'react-hot-toast';
 import PersonaManager from './PersonaManager'; // Import PersonaManager
 import CaptionRuleManager from './CaptionRuleManager'; // Import CaptionRuleManager
+import EditTemplateDetailsModal from './EditTemplateDetailsModal'; // Import the new modal
 
 // --- localStorage Keys ---
 const LOCALSTORAGE_PERSONA_ID_KEY = 'memeSelectorV2_selectedPersonaId';
@@ -104,6 +105,11 @@ export default function MemeSelectorV2() {
 
   // State to track loading for feedback from options cards
   const [optionFeedbackLoading, setOptionFeedbackLoading] = useState<Record<string, boolean>>({});
+
+  // --- State for Edit Template Details Modal ---
+  const [isEditDetailsModalOpen, setIsEditDetailsModalOpen] = useState(false);
+  const [templateToEdit, setTemplateToEdit] = useState<MemeTemplate | null>(null);
+  // --- End State for Edit Template Details Modal ---
 
   // --- Data Fetching with SWR --- 
   const { 
@@ -412,6 +418,68 @@ export default function MemeSelectorV2() {
      localStorage.removeItem(LOCALSTORAGE_RULE_SET_ID_KEY);
   };
 
+  // --- New Handlers for Edit Details Modal ---
+  const handleEditDetailsClick = (template: MemeTemplate) => {
+    setTemplateToEdit(template);
+    setIsEditDetailsModalOpen(true);
+  };
+
+  const handleSaveTemplateDetails = async (templateId: string, newName: string, newInstructions: string): Promise<MemeTemplate | null> => {
+    const payload: Partial<MemeTemplate> = {};
+    const originalTemplate = memeOptions?.find(opt => opt.template.id === templateId)?.template;
+
+    // Only include fields that have actually changed
+    if (originalTemplate && newName !== originalTemplate.name) {
+      payload.name = newName;
+    }
+    if (originalTemplate && newInstructions !== (originalTemplate.instructions || '')) {
+      payload.instructions = newInstructions;
+    }
+
+    // If no changes were detected by the modal logic already, this shouldn't be called,
+    // but double-check here just in case.
+    if (Object.keys(payload).length === 0) {
+      toast('No changes detected to save.');
+      return originalTemplate || null; // Return original if nothing changed
+    }
+
+    const toastId = toast.loading('Saving template details...');
+
+    try {
+      console.log('Updating template details:', templateId, payload);
+      const response = await fetch(`/api/templates/${templateId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to save details (Status: ${response.status})`);
+      }
+
+      const savedTemplate: MemeTemplate = await response.json(); // Get updated template
+
+      // Update local state IN PLACE
+      setMemeOptions(prevOptions =>
+        prevOptions?.map(opt =>
+          opt.template.id === templateId
+            ? { ...opt, template: savedTemplate } // Update the template within the option
+            : opt
+        ) ?? null // Handle null case for prevOptions
+      );
+
+      toast.success('Template details updated!', { id: toastId });
+      return savedTemplate; // Return the updated template on success
+
+    } catch (err: any) {
+      console.error('Save template details failed:', err);
+      toast.error(`Save failed: ${err.message}`, { id: toastId });
+      return null; // Return null on failure
+    }
+  };
+  // --- End New Handlers ---
+
   // --- Rendering Logic --- 
 
   // Render MemeGenerator when template and caption are selected
@@ -444,6 +512,18 @@ export default function MemeSelectorV2() {
       <PersonaManager isOpen={isPersonaModalOpen} onClose={() => setIsPersonaModalOpen(false)} />
       {/* Caption Rule Manager Modal */}
       <CaptionRuleManager isOpen={isRuleModalOpen} onClose={() => setIsRuleModalOpen(false)} />
+      {/* --- Edit Template Details Modal --- */}
+      <EditTemplateDetailsModal
+        isOpen={isEditDetailsModalOpen}
+        onClose={() => {
+          setIsEditDetailsModalOpen(false);
+          // Optionally clear templateToEdit here if needed, though useEffect handles it
+          // setTemplateToEdit(null); 
+        }}
+        template={templateToEdit}
+        onSave={handleSaveTemplateDetails}
+      />
+      {/* --- End Edit Template Details Modal --- */}
 
 
       {/* Global Error Display */} 
@@ -582,6 +662,7 @@ export default function MemeSelectorV2() {
                     <div className="w-full h-44 flex items-center justify-center bg-gray-700 rounded"><p className="text-gray-400">Video not available</p></div>
                   )}
                 </div>
+
                 <div className="space-y-4 flex-grow">
                   {option.modelCaptions.map((modelCaption) => (
                     <div key={modelCaption.modelId}>
@@ -617,7 +698,7 @@ export default function MemeSelectorV2() {
                 </div>
                 {/* <<< Feedback Buttons for Options Card >>> */} 
                 {selectedPersonaId && (
-                  <div className="mb-3 pt-2 border-t border-gray-700 space-x-2 flex justify-center">
+                  <div className="mt-4 pt-4 border-t border-gray-700 space-x-2 flex justify-center">
                     <button
                       onClick={() => handleFeedbackFromOptions(option.template.id, 'used')}
                       disabled={optionFeedbackLoading[option.template.id]}
@@ -638,6 +719,20 @@ export default function MemeSelectorV2() {
                     </button>
                   </div>
                 )}
+
+                {/* --- Instructions Display - MOVED HERE --- */}
+                <div
+                  className="mt-4 pt-4 border-t border-gray-700 p-3 bg-gray-700/60 rounded-md cursor-pointer hover:bg-gray-700/90 transition-colors" // Added mt-4, pt-4, border-t, removed mb-4, added full bg
+                  onClick={() => handleEditDetailsClick(option.template)}
+                  title="Click to edit name/instructions"
+                >
+                    <p className="text-xs font-medium text-gray-400 mb-1">Instructions:</p>
+                    <p className="text-sm text-gray-300 whitespace-pre-wrap line-clamp-3">
+                      {option.template.instructions || <span className="italic text-gray-500">No instructions provided. Click to add.</span>}
+                    </p>
+                </div>
+                {/* --- End Instructions Display --- */}
+
               </div>
             ))}
           </div>
