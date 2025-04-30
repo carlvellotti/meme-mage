@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
           .from('meme_templates')
           .select('*')
           .neq('reviewed', true)
+          .eq('is_duplicate', false)
           .order('created_at', { ascending: true })
           .range(from, to);
 
@@ -54,7 +55,8 @@ export async function GET(request: NextRequest) {
         const { count, error: countError } = await supabaseAdmin
             .from('meme_templates')
             .select('*', { count: 'exact', head: true })
-            .neq('reviewed', true);
+            .neq('reviewed', true)
+            .eq('is_duplicate', false);
 
          if (countError) {
             console.error('Error fetching unreviewed template count:', countError);
