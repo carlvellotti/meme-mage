@@ -18,6 +18,22 @@ import ImagePicker from '@/app/components/ImagePicker';
 import SpinningOrb from './SpinningOrb';
 import BackgroundSVG from './BackgroundSVG';
 
+// <<< Define Constant and Interface Here >>>
+const WATERMARK_SETTINGS_KEY = 'memeGenerator_watermarkSettings';
+
+interface WatermarkSettings {
+  text: string;
+  horizontalPosition: number; // % from left
+  verticalPosition: number;   // % from top
+  size: number;
+  font: string;
+  color: 'white' | 'black';
+  strokeWeight: number;
+  opacity: number; // 0 to 1
+  backgroundColor: 'black' | 'white' | 'transparent';
+  backgroundOpacity: number; // 0 to 1
+}
+
 // Import or define the SelectedMeme interface
 interface SelectedMeme {
   templates: {
@@ -133,6 +149,20 @@ export default function MemeGenerator({
   });
   const [isCropped, setIsCropped] = useState(false);
   const [isFeedbackLoading, setIsFeedbackLoading] = useState(false);
+  const [isWatermarkEnabled, setIsWatermarkEnabled] = useState<boolean>(true);
+  const [feedbackStatus, setFeedbackStatus] = useState<'used' | 'dont_use' | null>(null);
+  const [watermarkSettings, setWatermarkSettings] = useState<WatermarkSettings>({
+    text: personaName || '',
+    horizontalPosition: 98,
+    verticalPosition: 98,
+    size: 60,
+    font: 'Arial',
+    color: 'black',
+    strokeWeight: 0,
+    opacity: 0.5,
+    backgroundColor: 'transparent',
+    backgroundOpacity: 0.5,
+  });
 
   // Add a ref to track if the position has been calculated for this template
   const hasCalculatedPositionRef = useRef<string | null>(null);
@@ -310,6 +340,30 @@ export default function MemeGenerator({
     toast.loading("Brewing your meme... this might take a moment!", { id: 'download-toast' });
 
     try {
+      // <<< Caption Logging Logic >>>
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && selectedTemplate?.id && initialCaption) {
+        const { error: logError } = await supabase
+          .from('meme_generation_log')
+          .insert({
+            user_id: user.id,
+            template_id: selectedTemplate.id,
+            initial_ai_caption: initialCaption, // Use the prop passed from MemeSelectorV2
+            final_user_caption: caption // Use the current caption state
+          });
+
+        if (logError) {
+          console.error('Error logging meme generation:', logError);
+          // Optionally show a non-blocking toast, but don't block download
+          // toast.error('Could not log generation details.', { duration: 2000 });
+        } else {
+          console.log('Meme generation logged successfully.');
+        }
+      } else {
+         console.warn('Could not log meme generation: Missing user, template ID, or initial caption.');
+      }
+      // <<< End Logging Logic >>>
+
       const videoBlob = await createMemeVideo(
         selectedTemplate.video_url,
         caption,
@@ -318,7 +372,9 @@ export default function MemeGenerator({
         textSettings,
         labels,
         labelSettings,
-        isCropped
+        isCropped,
+        isWatermarkEnabled,
+        watermarkSettings
       );
 
       // Construct the filename
@@ -374,7 +430,9 @@ export default function MemeGenerator({
         textSettings,
         labels,
         labelSettings,
-        isCropped
+        isCropped,
+        isWatermarkEnabled,
+        watermarkSettings
       );
       
       // When previewCanvas exists, update its content, otherwise set the new canvas
@@ -529,7 +587,8 @@ export default function MemeGenerator({
       if (!response.ok) throw new Error(result.error || 'Failed to save feedback');
 
       toast.success(`Feedback saved: Template marked as ${status === 'used' ? '\'used\'' : '\'don\'t use\''} for this persona.`, { id: toastId });
-      // Optionally, update UI to reflect feedback state (e.g., disable buttons)
+      // <<< Update local state to reflect the saved status >>>
+      setFeedbackStatus(status);
       
     } catch (err: any) {
       console.error("Feedback Error:", err);
@@ -538,6 +597,65 @@ export default function MemeGenerator({
       setIsFeedbackLoading(false);
     }
   };
+
+  const updateWatermarkSetting = (key: keyof typeof watermarkSettings, value: number | string) => {
+    setWatermarkSettings(prev => ({
+      ...prev,
+      [key]: value
+    }));
+    
+    // Apply the updated settings to the labels
+    setLabels(labels.map(label => ({
+      ...label,
+      [key]: value
+    })));
+  };
+
+  // <<< Watermark Persistence Effects >>>
+  // Load from localStorage on mount
+  useEffect(() => {
+    let loadedSettings: Partial<WatermarkSettings> = {};
+    const savedSettings = localStorage.getItem(WATERMARK_SETTINGS_KEY);
+    if (savedSettings) {
+      try {
+        loadedSettings = JSON.parse(savedSettings) as WatermarkSettings;
+      } catch (e) {
+        console.error("Failed to parse watermark settings from localStorage", e);
+        // Keep loadedSettings empty, defaults will apply
+      }
+    }
+
+    // Initialize with defaults, then override with loaded settings
+    setWatermarkSettings(prev => ({
+      // Start with defaults (including personaName initially)
+      text: personaName || '',
+      horizontalPosition: 98,
+      verticalPosition: 98,
+      size: 60,
+      font: 'Arial',
+      color: 'black',
+      strokeWeight: 0,
+      opacity: 0.5,
+      backgroundColor: 'transparent',
+      backgroundOpacity: 0.5,
+      // Spread loaded settings OVER the defaults
+      ...loadedSettings 
+    }));
+
+    // Load watermark enabled state too
+    const savedEnabled = localStorage.getItem('memeGenerator_isWatermarkEnabled');
+    if (savedEnabled !== null) {
+      setIsWatermarkEnabled(savedEnabled === 'true');
+    } else {
+       // If not saved, default to true
+       setIsWatermarkEnabled(true);
+    }
+  }, []); // <<< Empty dependency array: Load only ONCE on mount >>>
+
+  // Save watermark settings to localStorage on change
+  useEffect(() => {
+    localStorage.setItem(WATERMARK_SETTINGS_KEY, JSON.stringify(watermarkSettings));
+  }, [watermarkSettings]);
 
   return (
     <div className="relative space-y-8">
@@ -768,7 +886,8 @@ export default function MemeGenerator({
                   </div>
                 </details>
 
-                <div>
+                {/* Label Section */}
+                <div className="mt-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-sm font-medium text-gray-300">Labels</h3>
                     <button
@@ -914,76 +1033,6 @@ export default function MemeGenerator({
                         </div>
 
                         <div>
-                          <label className="block text-xs text-gray-300 mb-1">Background Color</label>
-                          <div className="flex gap-0 border rounded-md overflow-hidden">
-                            <button
-                              onClick={() => updateLabelSetting('backgroundColor', 'black')}
-                              className={`flex-1 p-2 text-sm font-bold text-white bg-black flex items-center justify-center gap-1
-                                ${labelSettings.backgroundColor === 'black' 
-                                  ? 'ring-2 ring-inset ring-blue-500' 
-                                  : 'hover:bg-opacity-90'
-                                }`}
-                            >
-                              {labelSettings.backgroundColor === 'black' && (
-                                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                              Black
-                            </button>
-                            <div className="w-px bg-gray-200" />
-                            <button
-                              onClick={() => updateLabelSetting('backgroundColor', 'white')}
-                              className={`flex-1 p-2 text-sm font-bold text-black bg-white flex items-center justify-center gap-1
-                                ${labelSettings.backgroundColor === 'white' 
-                                  ? 'ring-2 ring-inset ring-blue-500' 
-                                  : 'hover:bg-gray-50'
-                                }`}
-                            >
-                              {labelSettings.backgroundColor === 'white' && (
-                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                              White
-                            </button>
-                            <div className="w-px bg-gray-200" />
-                            <button
-                              onClick={() => updateLabelSetting('backgroundColor', 'transparent')}
-                              className={`flex-1 p-2 text-sm font-bold text-white bg-gray-700 flex items-center justify-center gap-1
-                                ${labelSettings.backgroundColor === 'transparent' 
-                                  ? 'ring-2 ring-inset ring-blue-500' 
-                                  : 'hover:bg-gray-600'
-                                }`}
-                            >
-                              {labelSettings.backgroundColor === 'transparent' && (
-                                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                              None
-                            </button>
-                          </div>
-                        </div>
-
-                        {labelSettings.backgroundColor !== 'transparent' && (
-                          <div>
-                            <label className="block text-xs text-gray-300 mb-1">Background Opacity</label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="range"
-                                min="10"
-                                max="100"
-                                value={Math.round(labelSettings.backgroundOpacity * 100)}
-                                onChange={(e) => updateLabelSetting('backgroundOpacity', parseInt(e.target.value) / 100)}
-                                className="flex-1"
-                              />
-                              <span className="text-sm text-gray-300 w-12">{Math.round(labelSettings.backgroundOpacity * 100)}%</span>
-                            </div>
-                          </div>
-                        )}
-
-                        <div>
                           <label className="block text-xs text-gray-300 mb-1">Stroke Weight</label>
                           <div className="flex items-center gap-2">
                             <input
@@ -1001,6 +1050,118 @@ export default function MemeGenerator({
                     </details>
                   )}
                 </div>
+
+                {/* <<< Watermark Section (Moved Below Labels) >>> */}
+                <details className="mt-4" open>
+                  {/* <<< Updated Summary for Arrow >>> */}
+                  <summary className="cursor-pointer text-sm text-gray-300 hover:text-white list-item"> {/* Use list-item for default marker */}
+                    {/* Wrap text and checkbox for inline layout after marker */}
+                    <div className="inline-flex items-center gap-2 ml-1"> {/* Adjust margin as needed */}
+                      <span>Watermark</span>
+                      <input
+                        type="checkbox"
+                        checked={isWatermarkEnabled}
+                        onChange={(e) => {
+                          e.stopPropagation(); 
+                          setIsWatermarkEnabled(!isWatermarkEnabled)
+                        }}
+                        onClick={(e) => e.stopPropagation()} 
+                        className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                      />
+                    </div>
+                  </summary>
+                  {isWatermarkEnabled && (
+                    <div className="mt-3 space-y-4 pl-4 pr-2 py-3 bg-gray-700/50 rounded-lg"> {/* Adjusted padding */}                      {/* Watermark Controls Here... */}
+                      {/* ... Text, Font, Size, Position, Color, Opacity, Stroke, Background ... */}
+                       <div>
+                        <label className="block text-xs text-gray-300 mb-1">Text</label>
+                        <input type="text" value={watermarkSettings.text} onChange={(e) => updateWatermarkSetting('text', e.target.value)} placeholder="Enter watermark text..." className="w-full p-2 text-sm border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-300 mb-1">Font</label>
+                        <select value={watermarkSettings.font} onChange={(e) => updateWatermarkSetting('font', e.target.value)} className="w-full p-2 text-sm border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-2 focus:ring-blue-500" >
+                           <option value="Arial">Arial</option>
+                           <option value="Impact">Impact</option>
+                           <option value="Arial Black">Arial Black</option>
+                           <option value="Comic Sans MS">Comic Sans MS</option>
+                           <option value="Helvetica">Helvetica</option>
+                           <option value="Futura">Futura</option>
+                           <option value="Oswald">Oswald</option>
+                           <option value="Anton">Anton</option>
+                           <option value="Roboto">Roboto</option>
+                           <option value="Times New Roman">Times New Roman</option>
+                           <option value="Verdana">Verdana</option>
+                           <option value="Courier New">Courier New</option>
+                           <option value="Bebas Neue">Bebas Neue</option>
+                         </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-300 mb-1">Size</label>
+                        <div className="flex items-center gap-2">
+                          <input type="range" min="10" max="100" value={watermarkSettings.size} onChange={(e) => updateWatermarkSetting('size', parseInt(e.target.value))} className="flex-1" />
+                          <span className="text-sm text-gray-300 w-12">{watermarkSettings.size}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-300 mb-1">Horizontal Position</label>
+                          <div className="flex items-center gap-2">
+                            <input type="range" min="0" max="100" value={watermarkSettings.horizontalPosition} onChange={(e) => updateWatermarkSetting('horizontalPosition', parseInt(e.target.value))} className="flex-1" />
+                            <span className="text-sm text-gray-300 w-12">{watermarkSettings.horizontalPosition}%</span>
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-300 mb-1">Vertical Position</label>
+                          <div className="flex items-center gap-2">
+                            <input type="range" min="0" max="100" value={watermarkSettings.verticalPosition} onChange={(e) => updateWatermarkSetting('verticalPosition', parseInt(e.target.value))} className="flex-1" />
+                            <span className="text-sm text-gray-300 w-12">{watermarkSettings.verticalPosition}%</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-300 mb-1">Color</label>
+                        <div className="flex gap-0 border rounded-md overflow-hidden">
+                          <button onClick={() => updateWatermarkSetting('color', 'white')} className={`flex-1 p-2 text-sm font-bold text-black bg-white flex items-center justify-center gap-1 ${watermarkSettings.color === 'white' ? 'ring-2 ring-inset ring-blue-500' : 'hover:bg-gray-50'}`} > {watermarkSettings.color === 'white' && ( <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> )} White </button>
+                          <div className="w-px bg-gray-200" />
+                          <button onClick={() => updateWatermarkSetting('color', 'black')} className={`flex-1 p-2 text-sm font-bold text-white bg-black flex items-center justify-center gap-1 ${watermarkSettings.color === 'black' ? 'ring-2 ring-inset ring-blue-500' : 'hover:bg-opacity-90'}`} > {watermarkSettings.color === 'black' && ( <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> )} Black </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-300 mb-1">Text Opacity</label>
+                        <div className="flex items-center gap-2">
+                          <input type="range" min="0" max="100" value={Math.round(watermarkSettings.opacity * 100)} onChange={(e) => updateWatermarkSetting('opacity', parseInt(e.target.value) / 100)} className="flex-1" />
+                          <span className="text-sm text-gray-300 w-12">{Math.round(watermarkSettings.opacity * 100)}%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-300 mb-1">Stroke Weight</label>
+                        <div className="flex items-center gap-2">
+                          <input type="range" min="0" max="20" value={Math.round(watermarkSettings.strokeWeight * 100)} onChange={(e) => updateWatermarkSetting('strokeWeight', parseInt(e.target.value) / 100)} className="flex-1" />
+                          <span className="text-sm text-gray-300 w-12">{Math.round(watermarkSettings.strokeWeight * 100)}%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-300 mb-1">Background Color</label>
+                         <div className="flex gap-0 border rounded-md overflow-hidden">
+                           <button onClick={() => updateWatermarkSetting('backgroundColor', 'black')} className={`flex-1 p-2 text-sm font-bold text-white bg-black flex items-center justify-center gap-1 ${watermarkSettings.backgroundColor === 'black' ? 'ring-2 ring-inset ring-blue-500' : 'hover:bg-opacity-90'}`} > {watermarkSettings.backgroundColor === 'black' && ( <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> )} Black </button>
+                           <div className="w-px bg-gray-200" />
+                           <button onClick={() => updateWatermarkSetting('backgroundColor', 'white')} className={`flex-1 p-2 text-sm font-bold text-black bg-white flex items-center justify-center gap-1 ${watermarkSettings.backgroundColor === 'white' ? 'ring-2 ring-inset ring-blue-500' : 'hover:bg-gray-50'}`} > {watermarkSettings.backgroundColor === 'white' && ( <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> )} White </button>
+                           <div className="w-px bg-gray-200" />
+                           <button onClick={() => updateWatermarkSetting('backgroundColor', 'transparent')} className={`flex-1 p-2 text-sm font-bold text-white bg-gray-700 flex items-center justify-center gap-1 ${watermarkSettings.backgroundColor === 'transparent' ? 'ring-2 ring-inset ring-blue-500' : 'hover:bg-gray-600'}`} > {watermarkSettings.backgroundColor === 'transparent' && ( <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> )} None </button>
+                         </div>
+                      </div>
+                      {watermarkSettings.backgroundColor !== 'transparent' && (
+                        <div>
+                          <label className="block text-xs text-gray-300 mb-1">Background Opacity</label>
+                          <div className="flex items-center gap-2">
+                            <input type="range" min="10" max="100" value={Math.round(watermarkSettings.backgroundOpacity * 100)} onChange={(e) => updateWatermarkSetting('backgroundOpacity', parseInt(e.target.value) / 100)} className="flex-1" />
+                            <span className="text-sm text-gray-300 w-12">{Math.round(watermarkSettings.backgroundOpacity * 100)}%</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </details>
 
                 <div className="flex gap-4">
                   {isGreenscreenMode ? (
@@ -1078,7 +1239,14 @@ export default function MemeGenerator({
                     <button
                       onClick={() => handleFeedback('used')}
                       disabled={isFeedbackLoading}
-                      className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      className={`px-3 py-1.5 text-sm rounded-md flex items-center gap-1 transition-all duration-150 ease-in-out 
+                        ${feedbackStatus === 'used' 
+                          ? 'bg-green-600 hover:bg-green-700 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-green-500' 
+                          : feedbackStatus === 'dont_use' 
+                            ? 'bg-green-800 hover:bg-green-700 text-green-300 opacity-60 hover:opacity-100' 
+                            : 'bg-green-600 hover:bg-green-700 text-white' // Default
+                        } 
+                        disabled:opacity-50 disabled:cursor-not-allowed`}
                       title="Mark this template as used/good for the selected persona"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -1087,7 +1255,14 @@ export default function MemeGenerator({
                     <button
                       onClick={() => handleFeedback('dont_use')}
                       disabled={isFeedbackLoading}
-                      className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                       className={`px-3 py-1.5 text-sm rounded-md flex items-center gap-1 transition-all duration-150 ease-in-out 
+                        ${feedbackStatus === 'dont_use' 
+                          ? 'bg-red-600 hover:bg-red-700 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-red-500' 
+                          : feedbackStatus === 'used' 
+                            ? 'bg-red-800 hover:bg-red-700 text-red-300 opacity-60 hover:opacity-100' 
+                            : 'bg-red-600 hover:bg-red-700 text-white' // Default
+                        } 
+                        disabled:opacity-50 disabled:cursor-not-allowed`}
                       title="Mark this template as bad/don't use for the selected persona"
                     >
                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
