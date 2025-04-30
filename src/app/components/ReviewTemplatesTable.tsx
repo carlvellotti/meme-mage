@@ -470,6 +470,43 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
       }
   };
 
+  // --- NEW: Handler for Mark as Duplicate --- 
+  const handleMarkAsDuplicate = async (templateId: string) => {
+    const template = unreviewedTemplates.find(t => t.id === templateId);
+    if (!template) return; 
+
+    console.log('Marking as duplicate:', templateId);
+    // Optional: Add a confirmation dialog
+    // if (!window.confirm(`Mark "${template.name}" as a duplicate? It will be hidden from review.`)) {
+    //   return;
+    // }
+
+    try {
+      const response = await fetch(`/api/templates/${templateId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_duplicate: true }),
+      });
+
+      if (!response.ok) {
+        let errorMsg = `Failed to mark as duplicate (Status: ${response.status})`;
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.error || errorData.message || errorMsg;
+        } catch (e) { /* Ignore parsing error */ }
+        throw new Error(errorMsg);
+      }
+
+      // Remove from local state
+      setUnreviewedTemplates(prev => prev.filter(t => t.id !== templateId));
+      toast.success(`Template "${template.name}" marked as duplicate.`);
+
+    } catch (err: any) {
+      console.error('Mark as duplicate failed:', err);
+      toast.error(`Failed to mark as duplicate: ${err.message}`);
+    }
+  };
+
   if (isLoading) {
     return (
         <div className={`${className} space-y-4 bg-gray-800 p-6 rounded-lg border border-gray-700 mt-8`}>
@@ -600,24 +637,32 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
                           <span className="text-gray-500">-'</span>
                         )}
                       </td>
-                      {/* Actions Column */} 
+                      {/* Actions Column */}
                       <td className="px-4 py-2 align-top">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex flex-wrap gap-2 max-w-[180px]"> {/* Container for wrapping and gap */}
                             <button
-                                onClick={() => handleEditClick(template)} 
-                                className="px-3 py-1 text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                                onClick={() => handleEditClick(template)}
+                                className="flex-1 px-3 py-1 text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 min-w-[70px] justify-center"
                                 >
                                 Edit
                                 </button>
                                 <button
                                 onClick={() => handleApproveOnly(template.id)} // Use handleApproveOnly for the standalone button
-                                className="px-3 py-1 text-xs font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-emerald-500"
+                                className="flex-1 px-3 py-1 text-xs font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-emerald-500 min-w-[70px] justify-center"
                                 >
                                 Approve
                                 </button>
+                                {/* --- NEW: Duplicate Button --- */}
+                                <button
+                                    onClick={() => handleMarkAsDuplicate(template.id)}
+                                    className="flex-1 px-3 py-1 text-xs font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-yellow-500 min-w-[70px] justify-center"
+                                    title="Mark this template as a duplicate (hides from review)"
+                                >
+                                    Duplicate
+                                </button>
                                 <button
                                 onClick={() => handleDelete(template.id)}
-                                className="px-3 py-1 text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-red-500"
+                                className="flex-1 px-3 py-1 text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-red-500 min-w-[70px] justify-center"
                                 >
                                 Delete
                             </button>
