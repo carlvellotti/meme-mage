@@ -252,7 +252,7 @@ export default function MemeSelectorV2() {
     console.log(`Primary System Prompt (Start): ${primarySystemPrompt.substring(0, 200)}...`); 
     // console.log("Full Primary System Prompt:", primarySystemPrompt); // Uncomment if full prompt needed
     if (secondaryRulesText) {
-      console.log(`Secondary System Prompt (Start): ${secondarySystemPrompt.substring(0, 200)}...`);
+      console.log(`Secondary System Prompt (Start): ${secondarySystemPrompt!.substring(0, 200)}...`);
       // console.log("Full Secondary System Prompt:", secondarySystemPrompt); // Uncomment if full prompt needed
     }
 
