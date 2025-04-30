@@ -13,6 +13,20 @@ declare global {
 
 import { TextSettings } from '@/lib/types/meme';
 
+// <<< Add WatermarkSettings interface >>>
+interface WatermarkSettings {
+  text: string;
+  horizontalPosition: number;
+  verticalPosition: number;
+  size: number;
+  font: string;
+  color: 'white' | 'black';
+  strokeWeight: number;
+  opacity: number;
+  backgroundColor: 'black' | 'white' | 'transparent';
+  backgroundOpacity: number;
+}
+
 // Add Label interface at the top
 interface Label {
   id: string;
@@ -22,6 +36,68 @@ interface Label {
   size: number;
   font: string;
 }
+
+// <<< Define drawWatermark function BEFORE createMemeVideo >>>
+function drawWatermark(
+  ctx: CanvasRenderingContext2D,
+  finalX: number,
+  finalY: number,
+  watermarkSettings: WatermarkSettings,
+  canvasWidthForWrap: number 
+) {
+  // ... implementation from previous step ...
+  ctx.save();
+  ctx.font = `${watermarkSettings.size}px ${watermarkSettings.font}`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
+
+  const watermarkX = finalX;
+  const watermarkY = finalY;
+
+  const watermarkLines = wrapText(ctx, watermarkSettings.text, canvasWidthForWrap * 0.4);
+  const watermarkLineHeight = watermarkSettings.size * 1.1;
+
+  ctx.globalAlpha = watermarkSettings.opacity;
+
+  if (watermarkSettings.backgroundColor !== 'transparent') {
+    ctx.fillStyle = watermarkSettings.backgroundColor;
+    const backgroundEffectiveOpacity = watermarkSettings.backgroundOpacity * watermarkSettings.opacity;
+    ctx.globalAlpha = backgroundEffectiveOpacity;
+
+    let maxLineWidth = 0;
+    watermarkLines.forEach(line => {
+      const metrics = ctx.measureText(line);
+      if (metrics.width > maxLineWidth) maxLineWidth = metrics.width;
+    });
+
+    const padding = 5;
+    const backgroundWidth = maxLineWidth + padding * 2;
+    const backgroundHeight = (watermarkLines.length * watermarkLineHeight) + padding * 2;
+    const backgroundX = watermarkX - backgroundWidth;
+    const backgroundY = watermarkY - backgroundHeight;
+
+    ctx.fillRect(backgroundX, backgroundY, backgroundWidth, backgroundHeight);
+  }
+
+  ctx.globalAlpha = watermarkSettings.opacity;
+
+  watermarkLines.reverse().forEach((line, index) => {
+    const currentLineY = watermarkY - (index * watermarkLineHeight);
+    if (watermarkSettings.strokeWeight > 0) {
+      ctx.lineWidth = watermarkSettings.size * watermarkSettings.strokeWeight;
+      ctx.strokeStyle = watermarkSettings.color === 'white' ? 'black' : 'white';
+      ctx.strokeText(line, watermarkX, currentLineY);
+    }
+    ctx.fillStyle = watermarkSettings.color;
+    ctx.fillText(line, watermarkX, currentLineY);
+  });
+  watermarkLines.reverse();
+
+  ctx.restore();
+}
+
+// <<< Define wrapText if it's not already before createMemeVideo >>>
+// Function definition for wrapText should be here or imported
 
 export async function createMemeVideo(
   videoUrl: string,
@@ -38,7 +114,9 @@ export async function createMemeVideo(
     backgroundColor?: 'black' | 'white' | 'transparent';
     backgroundOpacity?: number;
   },
-  isCropped?: boolean
+  isCropped?: boolean,
+  isWatermarkEnabled?: boolean,
+  watermarkSettings?: WatermarkSettings
 ): Promise<Blob> {
   // Create a container to hold and control all media elements
   const container = document.createElement('div');
@@ -106,7 +184,7 @@ export async function createMemeVideo(
     container.appendChild(canvas);
 
     // Step 4: Create a rendering function
-    const renderFrame = () => {
+    const renderFrame = (watermarkEnabled: boolean, currentWatermarkSettings: WatermarkSettings | undefined) => {
       // Clear canvas with black background
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -287,6 +365,44 @@ export async function createMemeVideo(
           }
         });
       }
+
+      // <<< Draw Watermark >>>
+      if (watermarkEnabled && currentWatermarkSettings && currentWatermarkSettings.text) {
+        // <<< Calculate video bounds based on crop state >>>
+        let videoRect = {
+          x: 0,
+          y: 0,
+          width: targetWidth,
+          height: targetHeight
+        };
+
+        if (isCropped && !isGreenscreen) {
+           // Calculate cropped video top position
+          const fontSize = textSettings?.size || 78;
+          const font = textSettings?.font || 'Impact';
+          const lineHeight = fontSize * 1.1;
+          const maxWidth = canvas.width - 80;
+          const lines = wrapText(ctx, caption, maxWidth);
+          const totalTextHeight = lines.length * lineHeight;
+          const textTop = 30;
+          const textBottom = textTop + totalTextHeight;
+          const currentVideoTop = textBottom + 15;
+
+          videoRect.x = 0;
+          videoRect.y = currentVideoTop;
+        } else {
+           // Standard video position (covers greenscreen and non-cropped)
+          videoRect.x = 0;
+          videoRect.y = yOffset; // Use the standard yOffset
+        }
+
+        // <<< Calculate final watermark coords relative to videoRect >>>
+        const finalWatermarkX = videoRect.x + (currentWatermarkSettings.horizontalPosition / 100) * videoRect.width;
+        const finalWatermarkY = videoRect.y + (currentWatermarkSettings.verticalPosition / 100) * videoRect.height;
+
+        // <<< Call drawWatermark with final coordinates >>>
+        drawWatermark(ctx, finalWatermarkX, finalWatermarkY, currentWatermarkSettings, canvas.width);
+      }
     };
 
     // Step 5: Set up media recorder with proper audio handling
@@ -352,7 +468,7 @@ export async function createMemeVideo(
       // Set up animation frame loop
       let animationFrameId: number;
       const updateCanvas = () => {
-        renderFrame();
+        renderFrame(isWatermarkEnabled || false, watermarkSettings);
         animationFrameId = requestAnimationFrame(updateCanvas);
       };
       
@@ -370,7 +486,7 @@ export async function createMemeVideo(
           cancelAnimationFrame(animationFrameId);
           
           // Render one final frame to ensure we have a clean frame
-          renderFrame();
+          renderFrame(isWatermarkEnabled || false, watermarkSettings);
           
           // Stop the recorder immediately
           recorder.stop();
@@ -403,7 +519,7 @@ export async function createMemeVideo(
         recorder.start(100); // Capture in 100ms chunks for smoother recording
         
         // Start animation frame loop
-        animationFrameId = requestAnimationFrame(updateCanvas);
+        updateCanvas();
         
         // Play both video and audio in sync
         const playPromises = [

@@ -10,6 +10,20 @@ interface Label {
   font: string;
 }
 
+// <<< Add WatermarkSettings interface (copy from MemeGenerator.tsx or define here) >>>
+interface WatermarkSettings {
+  text: string;
+  horizontalPosition: number; // % from left
+  verticalPosition: number;   // % from top
+  size: number;
+  font: string;
+  color: 'white' | 'black';
+  strokeWeight: number;
+  opacity: number; // 0 to 1
+  backgroundColor: 'black' | 'white' | 'transparent';
+  backgroundOpacity: number; // 0 to 1
+}
+
 export async function createMemePreview(
   videoUrl: string,
   caption: string,
@@ -25,7 +39,10 @@ export async function createMemePreview(
     backgroundColor?: string;
     backgroundOpacity?: number;
   },
-  isCropped?: boolean
+  isCropped?: boolean,
+  // <<< Add watermark parameters >>>
+  isWatermarkEnabled?: boolean,
+  watermarkSettings?: WatermarkSettings
 ): Promise<HTMLCanvasElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
@@ -383,6 +400,94 @@ export async function createMemePreview(
           }
           // If label is outside the video area, we don't show it in cropped mode
         });
+      }
+
+      // <<< Draw Watermark (if enabled) >>>
+      if (isWatermarkEnabled && watermarkSettings && watermarkSettings.text) {
+        ctx.save(); // Save context state
+
+        const maxWidth = canvas.width - 80;
+
+        ctx.font = `${watermarkSettings.size}px ${watermarkSettings.font}`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+
+        // <<< Calculate video bounds based on crop state >>>
+        let videoRect = {
+          x: 0,
+          y: 0,
+          width: targetWidth, // Use video's intrinsic/drawn dimensions
+          height: targetHeight
+        };
+
+        if (isCropped && !isGreenscreen) {
+          // Calculate cropped video top position
+          const fontSize = textSettings?.size || 78;
+          const font = textSettings?.font || 'Impact';
+          const lineHeight = fontSize * 1.1;
+          const captionLines = wrapText(ctx, caption, maxWidth);
+          const totalTextHeight = captionLines.length * lineHeight;
+          const textTop = 30;
+          const textBottom = textTop + totalTextHeight;
+          const currentVideoTop = textBottom + 15;
+
+          videoRect.x = 0;
+          videoRect.y = currentVideoTop;
+        } else {
+          // Standard video position
+          videoRect.x = 0;
+          videoRect.y = yOffset; // Use the standard yOffset
+        }
+
+        // <<< Calculate final watermark coords relative to videoRect >>>
+        const finalWatermarkX = videoRect.x + (watermarkSettings.horizontalPosition / 100) * videoRect.width;
+        const finalWatermarkY = videoRect.y + (watermarkSettings.verticalPosition / 100) * videoRect.height;
+
+        const watermarkX = finalWatermarkX;
+        const watermarkY = finalWatermarkY;
+
+        // Use canvas width for wrapping calculation, but limit more strictly
+        const watermarkLines = wrapText(ctx, watermarkSettings.text, maxWidth * 0.5); 
+        const watermarkLineHeight = watermarkSettings.size * 1.1;
+
+        // Set base opacity
+        ctx.globalAlpha = watermarkSettings.opacity;
+
+        // Background
+        if (watermarkSettings.backgroundColor !== 'transparent') {
+          ctx.fillStyle = watermarkSettings.backgroundColor;
+          const backgroundEffectiveOpacity = watermarkSettings.backgroundOpacity * watermarkSettings.opacity;
+          ctx.globalAlpha = backgroundEffectiveOpacity;
+
+          let maxLineWidth = 0;
+          watermarkLines.forEach(line => {
+            const metrics = ctx.measureText(line);
+            if (metrics.width > maxLineWidth) maxLineWidth = metrics.width;
+          });
+
+          const padding = 5; 
+          const backgroundWidth = maxLineWidth + padding * 2;
+          const backgroundHeight = (watermarkLines.length * watermarkLineHeight) + padding * 2;
+          const backgroundX = watermarkX - backgroundWidth;
+          const backgroundY = watermarkY - backgroundHeight;
+
+          ctx.fillRect(backgroundX, backgroundY, backgroundWidth, backgroundHeight);
+        }
+        // Text
+        ctx.globalAlpha = watermarkSettings.opacity;
+        watermarkLines.reverse().forEach((line, index) => {
+           const currentLineY = watermarkY - (index * watermarkLineHeight);
+           if (watermarkSettings.strokeWeight > 0) {
+             ctx.lineWidth = watermarkSettings.size * watermarkSettings.strokeWeight;
+             ctx.strokeStyle = watermarkSettings.color === 'white' ? 'black' : 'white';
+             ctx.strokeText(line, watermarkX, currentLineY);
+           }
+           ctx.fillStyle = watermarkSettings.color;
+           ctx.fillText(line, watermarkX, currentLineY);
+        });
+        watermarkLines.reverse();
+
+        ctx.restore();
       }
 
       resolve(canvas);

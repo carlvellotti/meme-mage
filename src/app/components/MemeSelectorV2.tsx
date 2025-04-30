@@ -122,6 +122,9 @@ export default function MemeSelectorV2() {
   // State to track loading for feedback from options cards
   const [optionFeedbackLoading, setOptionFeedbackLoading] = useState<Record<string, boolean>>({});
 
+  // <<< State for feedback statuses per template >>>
+  const [templateFeedbackStatuses, setTemplateFeedbackStatuses] = useState<Record<string, 'used' | 'dont_use' | null>>({});
+
   // --- State for Edit Template Details Modal ---
   const [isEditDetailsModalOpen, setIsEditDetailsModalOpen] = useState(false);
   const [templateToEdit, setTemplateToEdit] = useState<MemeTemplate | null>(null);
@@ -513,6 +516,11 @@ export default function MemeSelectorV2() {
 
       toast.success(`Feedback saved!`, { id: toastId });
       // Optionally, update UI within the card to show feedback was given
+      // <<< Update the state for this specific templateId >>>
+      setTemplateFeedbackStatuses(prev => ({
+        ...prev,
+        [templateId]: status
+      }));
 
     } catch (err: any) {
       console.error("Feedback Error from Options:", err); // Corrected console log context
@@ -951,7 +959,14 @@ export default function MemeSelectorV2() {
                     <button
                       onClick={() => handleFeedbackFromOptions(option.template.id, 'used')}
                       disabled={optionFeedbackLoading[option.template.id]}
-                      className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      className={`px-2 py-1 text-xs rounded-md flex items-center gap-1 transition-all duration-150 ease-in-out 
+                        ${templateFeedbackStatuses[option.template.id] === 'used' 
+                          ? 'bg-green-600 hover:bg-green-700 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-green-500' 
+                          : templateFeedbackStatuses[option.template.id] === 'dont_use' 
+                            ? 'bg-green-800 hover:bg-green-700 text-green-300 opacity-60 hover:opacity-100' 
+                            : 'bg-green-600 hover:bg-green-700 text-white' // Default
+                        } 
+                        disabled:opacity-50 disabled:cursor-not-allowed`}
                       title="Mark this template as used/good for the selected persona"
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -960,7 +975,14 @@ export default function MemeSelectorV2() {
                     <button
                       onClick={() => handleFeedbackFromOptions(option.template.id, 'dont_use')}
                       disabled={optionFeedbackLoading[option.template.id]}
-                      className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      className={`px-2 py-1 text-xs rounded-md flex items-center gap-1 transition-all duration-150 ease-in-out 
+                        ${templateFeedbackStatuses[option.template.id] === 'dont_use' 
+                          ? 'bg-red-600 hover:bg-red-700 text-white ring-2 ring-offset-2 ring-offset-gray-800 ring-red-500' 
+                          : templateFeedbackStatuses[option.template.id] === 'used' 
+                            ? 'bg-red-800 hover:bg-red-700 text-red-300 opacity-60 hover:opacity-100' 
+                            : 'bg-red-600 hover:bg-red-700 text-white' // Default
+                        } 
+                        disabled:opacity-50 disabled:cursor-not-allowed`}
                       title="Mark this template as bad/don't use for the selected persona"
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
