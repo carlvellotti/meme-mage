@@ -9,6 +9,8 @@ import toast from 'react-hot-toast';
 import PersonaManager from './PersonaManager'; // Import PersonaManager
 import CaptionRuleManager from './CaptionRuleManager'; // Import CaptionRuleManager
 import EditTemplateDetailsModal from './EditTemplateDetailsModal'; // Import the new modal
+import SpinningOrb from './SpinningOrb'; // <-- Import SpinningOrb
+import BackgroundSVG from './BackgroundSVG'; // <-- Import BackgroundSVG
 
 // --- localStorage Keys ---
 const LOCALSTORAGE_PERSONA_ID_KEY = 'memeSelectorV2_selectedPersonaId';
@@ -878,11 +880,16 @@ export default function MemeSelectorV2() {
         </form>
       )}
 
-      {/* Loading Indicator - Show only during caption generation */} 
+      {/* Loading Indicator - Show only during caption generation - UPDATED */}
       {isLoadingCaptions && (
-         <div className="flex flex-col justify-center items-center p-10 space-y-3">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-t-2 border-indigo-400"></div>
-            <p className="text-gray-300">Generating captions from AI models...</p>
+         <div className="flex flex-col items-center justify-center py-2 relative">
+            <div className="relative">
+              <BackgroundSVG width={300} height={300} />
+              <div style={{ marginTop: '-30px' }}>
+                <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
+              </div>
+            </div>
+            <p className="mt-24 text-gray-300">Conjuring memes...</p>
         </div>
       )}
 
@@ -919,12 +926,12 @@ export default function MemeSelectorV2() {
                       )}
 
                       {modelCaption.generationAttempts.map((attempt, attemptIndex) => (
-                        <div key={`${modelCaption.modelId}-${attempt.ruleSetId || 'default'}-${attemptIndex}`} className="mb-4 border-l-2 border-gray-600 pl-3">
+                        <div key={`${modelCaption.modelId}-${attempt.ruleSetId || 'default'}-${attemptIndex}`} className="mb-4">
                           <h5 className="font-normal text-sm text-gray-300 mb-2 flex items-center">
                              <span className="mr-2 font-medium">{attempt.ruleSetName}</span>
-                            {typeof attempt.latency === 'number' && (
+                            {/* {typeof attempt.latency === 'number' && (
                                 <span className="text-xs text-gray-500">({(attempt.latency / 1000).toFixed(1)}s)</span>
-                            )}
+                            )} */}
                           </h5>
                           {attempt.error && (
                             <div className="bg-red-900 border border-red-700 p-2 rounded text-sm text-red-300 mb-2">Error: {attempt.error}</div>
