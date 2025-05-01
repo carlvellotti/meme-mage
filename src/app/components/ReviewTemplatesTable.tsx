@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast'; // Assuming react-hot-toast is installed and configured
 import VideoPreviewCropModal from './VideoPreviewCropModal'; // Import the new modal
+import ReactMarkdown from 'react-markdown'; // <-- Added import
+import remarkGfm from 'remark-gfm'; // <-- Import remark-gfm
 
 // Assuming a type definition like this exists in src/lib/supabase/types.ts
 // Need to import the actual type when available
@@ -16,6 +18,117 @@ interface MemeTemplate {
   reviewed?: boolean | null;
   uploader_name?: string | null; // Added uploader name field
   // Add other relevant fields as needed from the actual type
+}
+
+// Helper function to preprocess markdown for better list rendering
+function preprocessMarkdownForLists(markdownText: string): string {
+  if (!markdownText) return '';
+
+  // Split into lines
+  const lines = markdownText.split('\n');
+  const processedLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const currentLine = lines[i];
+    const trimmedLine = currentLine.trim();
+    const prevLine = i > 0 ? lines[i - 1] : null;
+    const trimmedPrevLine = prevLine?.trim();
+
+    // Regex to check for common list markers (unordered *, -, + or ordered 1.)
+    const isListMarker = /^(\*|\-|\+|\d+\.)\s+/.test(trimmedLine);
+    // Check if the previous line was also a list marker (of the same type potentially, simplified for now)
+    const prevIsListMarker = trimmedPrevLine ? /^(\*|\-|\+|\d+\.)\s+/.test(trimmedPrevLine) : false;
+    // Check if previous line was blank
+    const prevIsBlank = trimmedPrevLine === '';
+
+    // Add a blank line *before* a list item if the previous line exists,
+    // wasn't blank, and wasn't also a list item.
+    if (isListMarker && prevLine !== null && !prevIsBlank && !prevIsListMarker) {
+      processedLines.push(''); // Insert blank line
+    }
+    
+    // Add the current line
+    processedLines.push(currentLine);
+
+    // --- Add blank line *after* a list block --- 
+    // Check if the *next* line exists and is NOT a list item or blank
+    // This helps separate list blocks from subsequent paragraphs
+    const nextLine = i + 1 < lines.length ? lines[i + 1] : null;
+    const trimmedNextLine = nextLine?.trim();
+    const nextIsListMarker = trimmedNextLine ? /^(\*|\-|\+|\d+\.)\s+/.test(trimmedNextLine) : false;
+    const nextIsBlank = trimmedNextLine === '';
+
+    if (isListMarker && nextLine !== null && !nextIsListMarker && !nextIsBlank) {
+        processedLines.push(''); // Add blank line after
+    }
+  }
+
+  return processedLines.join('\n');
+}
+
+// New helper function to wrap long lines in markdown
+function wrapLongLines(markdownText: string, maxLineLength: number = 80): string {
+  if (!markdownText) return '';
+  
+  // Split into lines
+  const lines = markdownText.split('\n');
+  const wrappedLines: string[] = [];
+  
+  // Process each line
+  for (const line of lines) {
+    if (line.length <= maxLineLength) {
+      wrappedLines.push(line); // Keep short lines as is
+      continue;
+    }
+    
+    // For longer lines, we need to analyze and split them
+    let currentLine = line;
+    let indent = '';
+    
+    // Preserve indentation at the beginning of the line
+    const indentMatch = currentLine.match(/^(\s+)/);
+    if (indentMatch) {
+      indent = indentMatch[1];
+      currentLine = currentLine.substring(indent.length);
+    }
+    
+    // Check if line starts with a list marker
+    const listMarkerMatch = currentLine.match(/^(\*|\-|\+|\d+\.)\s+/);
+    let listMarker = '';
+    if (listMarkerMatch) {
+      listMarker = listMarkerMatch[0];
+      currentLine = currentLine.substring(listMarker.length);
+    }
+    
+    // Now handle the actual text, preserving indentation and list markers for wrapped lines
+    let currentPosition = 0;
+    let firstSegment = true;
+    
+    while (currentPosition < currentLine.length) {
+      const remainingText = currentLine.substring(currentPosition);
+      let segmentLength = maxLineLength;
+      
+      if (firstSegment) {
+        // First segment gets the list marker and full indentation
+        segmentLength = maxLineLength - (indent.length + listMarker.length);
+        if (segmentLength < 20) segmentLength = 20; // Minimum to avoid tiny segments
+        
+        wrappedLines.push(indent + listMarker + remainingText.substring(0, segmentLength).trim());
+        firstSegment = false;
+      } else {
+        // Subsequent segments get indentation plus additional spaces for alignment
+        const continuationIndent = indent + ' '.repeat(listMarker.length);
+        segmentLength = maxLineLength - continuationIndent.length;
+        if (segmentLength < 20) segmentLength = 20;
+        
+        wrappedLines.push(continuationIndent + remainingText.substring(0, segmentLength).trim());
+      }
+      
+      currentPosition += segmentLength;
+    }
+  }
+  
+  return wrappedLines.join('\n');
 }
 
 interface UnreviewedTemplatesTableProps {
@@ -48,6 +161,7 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
   const [modalName, setModalName] = useState(initialName);              
   const [modalInstructions, setModalInstructions] = useState(initialInstructions);
   const [isSaving, setIsSaving] = useState(false); // Generic saving state
+  const [isEditingInstructions, setIsEditingInstructions] = useState(false); // <-- Added state
 
   useEffect(() => {
     setModalName(initialName);
@@ -97,7 +211,7 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
         className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300 px-4 py-8"
         onClick={handleOverlayClick} 
     >
-      <div className="bg-gray-800 p-6 rounded-lg max-w-4xl w-full mx-auto relative shadow-xl border border-gray-700 flex flex-col max-h-[85vh]">
+      <div className="bg-gray-800 p-6 rounded-lg w-full max-w-4xl mx-auto relative shadow-xl border border-gray-700 flex flex-col max-h-[95vh] overflow-hidden">
         <h3 className="text-lg font-semibold text-white mb-1 flex-shrink-0">Edit Template: {initialName}</h3>
         {/* Display Uploader Name if available */} 
         {uploaderName && (
@@ -119,19 +233,44 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
             />
         </div>
 
-        {/* Instructions Textarea */}
+        {/* Instructions Area - UPDATED */}
          <div className="mb-4 flex-grow flex flex-col">
             <label htmlFor="modal-template-instructions" className="block text-sm font-medium text-gray-300 mb-1">
-                Instructions
+                Instructions {isEditingInstructions ? '(Editing - Click outside to view)' : '(Click to edit)'}
             </label>
-            <textarea
-                id="modal-template-instructions"
-                value={modalInstructions}
-                onChange={(e) => setModalInstructions(e.target.value)}
-                className="w-full p-3 border border-gray-600 bg-gray-700 text-white rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm resize-y flex-grow"
-                placeholder="Enter detailed instructions..."
-                style={{minHeight: '450px'}} 
-            />
+            {isEditingInstructions ? (
+              <textarea
+                  id="modal-template-instructions"
+                  value={modalInstructions}
+                  onChange={(e) => setModalInstructions(e.target.value)}
+                  onBlur={() => setIsEditingInstructions(false)} // <-- Switch back on blur
+                  className="w-full p-3 border border-blue-500 bg-gray-700 text-white rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm resize-y flex-grow" // Highlight border when editing
+                  placeholder="Enter detailed instructions..."
+                  style={{minHeight: '800px', maxHeight: '60vh'}} // Restore taller height
+                  autoFocus // Focus when switching to edit mode
+              />
+            ) : (
+              <div
+                  onClick={() => setIsEditingInstructions(true)} // <-- Switch to edit on click
+                  className="w-full p-3 pb-6 border border-gray-600 bg-gray-700/60 text-white rounded-md text-sm flex-grow cursor-pointer hover:border-gray-500 overflow-y-auto prose prose-invert prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5"
+                  style={{minHeight: '800px', maxHeight: '60vh'}} // Restore taller height
+              >
+                  {modalInstructions ? (
+                      <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]} 
+                          components={{
+                              ol: ({node, ...props}) => <ol className="list-decimal list-outside pl-8 mb-2" {...props} />,
+                              ul: ({node, ...props}) => <ul className="list-disc list-outside pl-8 mb-2" {...props} />,
+                              li: ({node, ...props}) => <li className="mb-1 pl-1" {...props} />
+                          }}
+                      >
+                          {preprocessMarkdownForLists(modalInstructions)}
+                      </ReactMarkdown>
+                  ) : (
+                      <span className="text-gray-500 italic">No instructions provided. Click to add.</span>
+                  )}
+              </div>
+            )}
         </div>
 
         {/* Modal Footer */}
@@ -615,10 +754,16 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
                            {template.name}
                          </div>
                       </td>
-                      {/* Instructions Column */}
-                      <td className="px-4 py-2 align-top text-gray-300">
-                        <div className="text-gray-300 whitespace-pre-wrap max-w-sm text-xs line-clamp-4" title={template.instructions}>
-                          {template.instructions || <span className="text-gray-500 italic">No instructions</span>}
+                      {/* Instructions Column - UPDATED */}
+                      <td className="px-4 py-2 align-top">
+                        <div
+                          className="p-3 bg-gray-700/60 rounded-md cursor-pointer hover:bg-gray-700/90 transition-colors" // Styles from MemeSelectorV2, removed border-t, mt-4, pt-4
+                          onClick={() => handleEditClick(template)}
+                          title="Click to edit name/instructions"
+                        >
+                          <p className="text-sm text-gray-300 whitespace-pre-wrap line-clamp-3">
+                            {template.instructions || <span className="italic text-gray-500">No instructions provided. Click to add.</span>}
+                          </p>
                         </div>
                       </td>
                       {/* Source Column */}
