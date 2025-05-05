@@ -552,7 +552,7 @@ export default function MemeSelectorV2() {
     setIsLoadingTemplates(true);
     
     const requestBody = {
-      count: 3,
+      count: 5,
       prompt: userPrompt.trim() || undefined,
       persona_id: selectedPersonaId,
       isGreenscreenMode: isGreenscreenMode,
@@ -713,7 +713,7 @@ export default function MemeSelectorV2() {
 
   // --- Main Component Return --- 
   return (
-    <div className="w-full mx-auto p-4">
+    <div className="w-full mx-auto p-4 max-w-screen-2xl">
       {/* Persona Manager Modal */} 
       <PersonaManager isOpen={isPersonaModalOpen} onClose={() => setIsPersonaModalOpen(false)} />
       {/* Caption Rule Manager Modal */}
@@ -899,7 +899,7 @@ export default function MemeSelectorV2() {
           <h2 className="text-2xl font-semibold text-gray-100 mb-4 text-center">Generated Options</h2>
           <div className="flex flex-wrap justify-center gap-6 pb-4">
             {memeOptions.map((option) => (
-              <div key={option.template.id} className="w-full sm:w-[45%] md:w-[40%] lg:w-[30%] bg-gray-800 rounded-lg shadow-md p-4 border border-gray-700 flex flex-col" style={{ minWidth: '300px' }}> 
+              <div key={option.template.id} className="w-full sm:w-[45%] md:w-[40%] lg:w-[30%] xl:w-[18%] bg-gray-800 rounded-lg shadow-md p-4 border border-gray-700 flex flex-col" style={{ minWidth: '280px' }}> 
                 <h3 className="font-medium text-lg mb-2 text-white">{option.template.name}</h3>
                 <div className="mb-4 bg-gray-900 rounded flex-shrink-0">
                   {option.template.video_url ? (

@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
           .select('*')
           .neq('reviewed', true)
           .eq('is_duplicate', false)
-          .order('created_at', { ascending: true })
+          .order('created_at', { ascending: false })
           .range(from, to);
 
         if (fetchError) {
