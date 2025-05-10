@@ -552,7 +552,7 @@ export default function MemeSelectorV2() {
     setIsLoadingTemplates(true);
     
     const requestBody = {
-      count: 3,
+      count: 5,
       prompt: userPrompt.trim() || undefined,
       persona_id: selectedPersonaId,
       isGreenscreenMode: isGreenscreenMode,
@@ -569,6 +569,17 @@ export default function MemeSelectorV2() {
         const data = await response.json();
         if (data.templates && data.templates.length > 0) {
             setFetchedTemplates(data.templates);
+            // <<< Initialize templateFeedbackStatuses >>>
+            const initialStatuses: Record<string, 'used' | 'dont_use' | null> = {};
+            data.templates.forEach((template: MemeTemplate) => {
+              if (template.feedback_status) {
+                initialStatuses[template.id] = template.feedback_status;
+              } else {
+                initialStatuses[template.id] = null;
+              }
+            });
+            setTemplateFeedbackStatuses(initialStatuses);
+            // --- End Initialization ---
             generateCaptionsForAllTemplates(data.templates);
         } else {
             // Changed error message to be more specific
@@ -694,26 +705,32 @@ export default function MemeSelectorV2() {
     const selectedPersona = personas?.find(p => p.id === selectedPersonaId);
     const personaNameToPass = selectedPersona ? selectedPersona.name : null;
 
+    // <<< Get feedback status for the selected template >>>
+    const currentFeedbackStatus = templateFeedbackStatuses[selectedFinalTemplate.id] || null;
+
     return (
-      <MemeGenerator
-        initialTemplate={selectedFinalTemplate}
-        initialCaption={selectedFinalCaption}
-        initialOptions={convertToSelectedMemeFormat(memeOptions)}
-        isGreenscreenMode={isGreenscreenMode} 
-        onToggleMode={() => setIsGreenscreenMode(!isGreenscreenMode)} 
-        personaId={selectedPersonaId} // Keep passing ID for feedback etc.
-        personaName={personaNameToPass} // Pass the name for the filename
-        onBack={() => {
-          setSelectedFinalTemplate(null);
-          setSelectedFinalCaption(null);
-        }}
-      />
+      // Added a wrapping div with max-width AND original padding for the Generator view
+      <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
+        <MemeGenerator
+          initialTemplate={selectedFinalTemplate}
+          initialCaption={selectedFinalCaption}
+          initialOptions={convertToSelectedMemeFormat(optionsForGenerator)}
+          isGreenscreenMode={isGreenscreenMode}
+          onToggleMode={() => setIsGreenscreenMode(!isGreenscreenMode)}
+          personaId={selectedPersonaId}
+          personaName={personaNameToPass}
+          onBack={() => {
+            setSelectedFinalTemplate(null);
+            setSelectedFinalCaption(null);
+          }}
+        />
+      </div>
     );
   }
 
   // --- Main Component Return --- 
   return (
-    <div className="w-full mx-auto p-4">
+    <div className="w-full mx-auto p-4 max-w-screen-2xl">
       {/* Persona Manager Modal */} 
       <PersonaManager isOpen={isPersonaModalOpen} onClose={() => setIsPersonaModalOpen(false)} />
       {/* Caption Rule Manager Modal */}
@@ -899,7 +916,7 @@ export default function MemeSelectorV2() {
           <h2 className="text-2xl font-semibold text-gray-100 mb-4 text-center">Generated Options</h2>
           <div className="flex flex-wrap justify-center gap-6 pb-4">
             {memeOptions.map((option) => (
-              <div key={option.template.id} className="w-full sm:w-[45%] md:w-[40%] lg:w-[30%] bg-gray-800 rounded-lg shadow-md p-4 border border-gray-700 flex flex-col" style={{ minWidth: '300px' }}> 
+              <div key={option.template.id} className="w-full sm:w-[45%] md:w-[40%] lg:w-[30%] xl:w-[18%] bg-gray-800 rounded-lg shadow-md p-4 border border-gray-700 flex flex-col" style={{ minWidth: '280px' }}> 
                 <h3 className="font-medium text-lg mb-2 text-white">{option.template.name}</h3>
                 <div className="mb-4 bg-gray-900 rounded flex-shrink-0">
                   {option.template.video_url ? (

@@ -46,7 +46,7 @@ export default function RootLayout({
       <body className={`min-h-screen bg-gray-900 text-gray-100 ${inter.className}`}>
         <SupabaseProvider>
           <Navigation />
-          <main className="container mx-auto px-4 md:px-8 lg:px-12 max-w-7xl">
+          <main className="mx-auto px-4 md:px-8 lg:px-12">
             {children}
           </main>
           <Toaster 

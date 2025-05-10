@@ -1,3 +1,5 @@
+import { MemeTemplate } from '../supabase/types';
+
 export interface MemeVideo {
   id: string;
   name: string;
@@ -38,4 +40,11 @@ export interface TextSettings {
   alignment: 'left' | 'center' | 'right';
   color: 'white' | 'black';
   strokeWeight: number;
+}
+
+export interface SelectedMeme {
+  templates: {
+    template: MemeTemplate;
+    captions: string[];
+  }[];
 } 
