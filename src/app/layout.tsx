@@ -36,12 +36,6 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Anton&family=Bebas+Neue&display=swap"
           rel="stylesheet"
         />
-        <link 
-          rel="icon" 
-          href={`/favicon.png?v=${timestamp}`}
-          type="image/png" 
-          sizes="256x256"
-        />
       </head>
       <body className={`min-h-screen bg-gray-900 text-gray-100 ${inter.className}`}>
         <SupabaseProvider>
