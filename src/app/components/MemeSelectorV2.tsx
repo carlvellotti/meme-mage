@@ -714,12 +714,11 @@ export default function MemeSelectorV2() {
         <MemeGenerator
           initialTemplate={selectedFinalTemplate}
           initialCaption={selectedFinalCaption}
-          initialOptions={convertToSelectedMemeFormat(memeOptions)}
-          isGreenscreenMode={isGreenscreenMode} 
-          onToggleMode={() => setIsGreenscreenMode(!isGreenscreenMode)} 
-          personaId={selectedPersonaId} // Keep passing ID for feedback etc.
-          personaName={personaNameToPass} // Pass the name for the filename
-          initialFeedbackStatus={currentFeedbackStatus} // <<< Pass the status >>>
+          initialOptions={convertToSelectedMemeFormat(optionsForGenerator)}
+          isGreenscreenMode={isGreenscreenMode}
+          onToggleMode={() => setIsGreenscreenMode(!isGreenscreenMode)}
+          personaId={selectedPersonaId}
+          personaName={personaNameToPass}
           onBack={() => {
             setSelectedFinalTemplate(null);
             setSelectedFinalCaption(null);
