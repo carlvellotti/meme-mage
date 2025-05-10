@@ -53,6 +53,7 @@ export interface MemeTemplate {
   is_greenscreen?: boolean | null;
   original_source_url?: string | null;
   uploader_name?: string | null;
+  feedback_status?: 'used' | 'dont_use' | null;
 }
 
 export interface MemeGeneration {

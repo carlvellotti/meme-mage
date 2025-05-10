@@ -569,6 +569,17 @@ export default function MemeSelectorV2() {
         const data = await response.json();
         if (data.templates && data.templates.length > 0) {
             setFetchedTemplates(data.templates);
+            // <<< Initialize templateFeedbackStatuses >>>
+            const initialStatuses: Record<string, 'used' | 'dont_use' | null> = {};
+            data.templates.forEach((template: MemeTemplate) => {
+              if (template.feedback_status) {
+                initialStatuses[template.id] = template.feedback_status;
+              } else {
+                initialStatuses[template.id] = null;
+              }
+            });
+            setTemplateFeedbackStatuses(initialStatuses);
+            // --- End Initialization ---
             generateCaptionsForAllTemplates(data.templates);
         } else {
             // Changed error message to be more specific
@@ -694,20 +705,27 @@ export default function MemeSelectorV2() {
     const selectedPersona = personas?.find(p => p.id === selectedPersonaId);
     const personaNameToPass = selectedPersona ? selectedPersona.name : null;
 
+    // <<< Get feedback status for the selected template >>>
+    const currentFeedbackStatus = templateFeedbackStatuses[selectedFinalTemplate.id] || null;
+
     return (
-      <MemeGenerator
-        initialTemplate={selectedFinalTemplate}
-        initialCaption={selectedFinalCaption}
-        initialOptions={convertToSelectedMemeFormat(memeOptions)}
-        isGreenscreenMode={isGreenscreenMode} 
-        onToggleMode={() => setIsGreenscreenMode(!isGreenscreenMode)} 
-        personaId={selectedPersonaId} // Keep passing ID for feedback etc.
-        personaName={personaNameToPass} // Pass the name for the filename
-        onBack={() => {
-          setSelectedFinalTemplate(null);
-          setSelectedFinalCaption(null);
-        }}
-      />
+      // Added a wrapping div with max-width AND original padding for the Generator view
+      <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
+        <MemeGenerator
+          initialTemplate={selectedFinalTemplate}
+          initialCaption={selectedFinalCaption}
+          initialOptions={convertToSelectedMemeFormat(memeOptions)}
+          isGreenscreenMode={isGreenscreenMode} 
+          onToggleMode={() => setIsGreenscreenMode(!isGreenscreenMode)} 
+          personaId={selectedPersonaId} // Keep passing ID for feedback etc.
+          personaName={personaNameToPass} // Pass the name for the filename
+          initialFeedbackStatus={currentFeedbackStatus} // <<< Pass the status >>>
+          onBack={() => {
+            setSelectedFinalTemplate(null);
+            setSelectedFinalCaption(null);
+          }}
+        />
+      </div>
     );
   }
 

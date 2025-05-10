@@ -58,4 +58,47 @@ export async function POST(request: Request) {
     console.error(`[User: ${userId}] Unexpected error saving feedback:`, e);
     return NextResponse.json({ error: 'An unexpected error occurred', details: e.message }, { status: 500 });
   }
+}
+
+// GET /api/feedback?template_id=<ID>&persona_id=<ID> - Get feedback status for a template/persona
+export async function GET(request: Request) {
+  const supabase = createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const userId = user.id;
+  const { searchParams } = new URL(request.url);
+  const template_id = searchParams.get('template_id');
+  const persona_id = searchParams.get('persona_id');
+
+  if (!template_id) {
+    return NextResponse.json({ error: 'template_id is required' }, { status: 400 });
+  }
+  if (!persona_id) {
+    return NextResponse.json({ error: 'persona_id is required' }, { status: 400 });
+  }
+
+  try {
+    const { data: feedbackData, error: fetchError } = await supabase
+      .from('meme_feedback')
+      .select('status')
+      .eq('user_id', userId)
+      .eq('template_id', template_id)
+      .eq('persona_id', persona_id)
+      .maybeSingle(); // Use maybeSingle as feedback might not exist
+
+    if (fetchError) {
+      console.error(`[User: ${userId}] Error fetching feedback:`, fetchError);
+      return NextResponse.json({ error: 'Failed to fetch feedback', details: fetchError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ status: feedbackData?.status || null }, { status: 200 });
+
+  } catch (e: any) {
+    console.error(`[User: ${userId}] Unexpected error fetching feedback:`, e);
+    return NextResponse.json({ error: 'An unexpected error occurred', details: e.message }, { status: 500 });
+  }
 } 

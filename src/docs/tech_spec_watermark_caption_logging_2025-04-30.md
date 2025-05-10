@@ -1,6 +1,6 @@
 # Tech Spec: Watermark & Caption Logging
 
-**Date:** 2024-07-26
+**Date:** 2025-04-30
 
 ## Goals
 
