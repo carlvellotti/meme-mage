@@ -67,10 +67,9 @@ export async function POST(request: Request) {
 
         // 2. Call Supabase RPC function 'match_meme_templates'
         rpcParams = {
-          query_embedding: embedding,
-          match_threshold: 0.7, // Adjust threshold as needed
-          match_count: count,
-          filter_greenscreen: isGreenscreenMode,
+          embedding_param: embedding,
+          match_count_param: count,
+          filter_greenscreen_param: isGreenscreenMode,
           user_id_param: userId,          // Pass user ID
           persona_id_param: persona_id    // Pass persona ID (can be null)
         };
