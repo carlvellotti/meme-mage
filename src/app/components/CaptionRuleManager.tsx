@@ -38,6 +38,7 @@ export default function CaptionRuleManager({ isOpen, onClose }: CaptionRuleManag
   const [rulesInput, setRulesInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null); // For form-specific errors
+  const [isDuplicating, setIsDuplicating] = useState(false); // Added for distinguishing duplication
 
   // --- Data Fetching ---
   const { 
@@ -58,21 +59,25 @@ export default function CaptionRuleManager({ isOpen, onClose }: CaptionRuleManag
       setRulesInput('');
       setIsSubmitting(false);
       setErrorMsg(null);
+      setIsDuplicating(false); // Reset duplication flag
       if (mode !== 'list') setMode('list'); // Ensure mode resets if closing externally
     }
   }, [isOpen, mode]);
 
-  // Populate form when switching to edit mode
+  // Populate form when switching to edit mode or adding
   useEffect(() => {
     if (mode === 'edit' && selectedRuleSet) {
       setNameInput(selectedRuleSet.name);
       setRulesInput(selectedRuleSet.rules_text);
     } else if (mode === 'add') {
-      // Optionally prefill new rule set with default rules
-      setNameInput(''); 
-      setRulesInput(defaultRulesText);
+      // If not duplicating, prefill new rule set with default rules or leave empty
+      if (!isDuplicating) {
+        setNameInput('');
+        setRulesInput(defaultRulesText); // Or setRulesInput(''); based on desired default for new
+      }
+      // If isDuplicating, nameInput and rulesInput are already set by handleDuplicateRule
     }
-  }, [mode, selectedRuleSet, defaultRulesText]);
+  }, [mode, selectedRuleSet, defaultRulesText, isDuplicating]);
 
   // --- Event Handlers ---
   const handleSave = async (event: React.FormEvent) => {
@@ -123,6 +128,14 @@ export default function CaptionRuleManager({ isOpen, onClose }: CaptionRuleManag
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDuplicateRule = (ruleToDuplicate: CaptionRule) => {
+    setSelectedRuleSet(null); // Important: we are creating a new rule
+    setNameInput(`${ruleToDuplicate.name} (Copy)`);
+    setRulesInput(ruleToDuplicate.rules_text);
+    setIsDuplicating(true); // Set duplication flag
+    setMode('add'); // Switch to form view, but it's for a new (duplicated) rule
   };
 
   const handleDelete = async (id: string | undefined) => {
@@ -194,6 +207,13 @@ export default function CaptionRuleManager({ isOpen, onClose }: CaptionRuleManag
                     Edit
                     </button>
                     <button
+                    onClick={() => handleDuplicateRule(rule)}
+                    className="text-xs py-1 px-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-yellow-500"
+                    disabled={isSubmitting}
+                    >
+                    Duplicate
+                    </button>
+                    <button
                     onClick={() => handleDelete(rule.id)}
                     className="text-xs py-1 px-2 bg-red-600 hover:bg-red-700 text-white rounded-md disabled:opacity-50"
                     disabled={isSubmitting}
@@ -223,7 +243,7 @@ export default function CaptionRuleManager({ isOpen, onClose }: CaptionRuleManag
       <form onSubmit={handleSave} className="space-y-3" id="captionRuleForm">
         <div>
           <label htmlFor="ruleSetName" className="block text-sm font-medium text-gray-300 mb-1">
-            Rule Set Name
+            Rule Set Name ({mode === 'add' && isDuplicating ? 'Duplicating' : mode})
           </label>
           <input
             type="text"
@@ -244,7 +264,7 @@ export default function CaptionRuleManager({ isOpen, onClose }: CaptionRuleManag
             value={rulesInput}
             onChange={(e) => setRulesInput(e.target.value)}
             className="w-full p-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500 h-48"
-            placeholder="Enter key rules, one per line (e.g., starting with '-')"
+            placeholder={mode === 'add' && isDuplicating ? 'Review and save duplicated rules' : "Enter key rules, one per line (e.g., starting with '-')"}
             required
             disabled={isSubmitting}
           />
@@ -291,8 +311,13 @@ export default function CaptionRuleManager({ isOpen, onClose }: CaptionRuleManag
         <div className="flex-shrink-0 border-t border-gray-700 pt-4">
           {mode === 'list' && (
             <button
-              onClick={() => setMode('add')}
-              className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white rounded-md disabled:opacity-50"
+              onClick={() => {
+                setMode('add');
+                setIsDuplicating(false); // Ensure this is false for a brand new rule
+                setSelectedRuleSet(null); // Clear any selected rule
+                // Name and rules text will be set by useEffect for 'add' mode if not duplicating
+              }}
+              className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-md shadow-sm disabled:opacity-50"
               disabled={isSubmitting}
             >
               + Add New Rule Set

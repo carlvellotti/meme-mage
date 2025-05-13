@@ -132,6 +132,11 @@ export default function MemeSelectorV2() {
   const [templateToEdit, setTemplateToEdit] = useState<MemeTemplate | null>(null);
   // --- End State for Edit Template Details Modal ---
 
+  // --- State for Concept Exploration ---
+  const [conceptInputs, setConceptInputs] = useState<Record<string, string>>({});
+  const [conceptRegenerationLoading, setConceptRegenerationLoading] = useState<Record<string, boolean>>({});
+  // --- End State for Concept Exploration ---
+
   // --- Data Fetching with SWR --- 
   const { 
     data: personas, 
@@ -697,6 +702,171 @@ export default function MemeSelectorV2() {
   };
   // --- End New Handlers ---
 
+  // --- Template-Level Concept Exploration Handler ---
+  const handleRegenerateAllCaptionsForTemplateWithConcept = async (templateId: string) => {
+    const sharedConcept = conceptInputs[templateId];
+
+    if (!sharedConcept || sharedConcept.trim() === "") {
+      toast.error("Please enter a concept to explore.");
+      return;
+    }
+
+    setConceptRegenerationLoading(prev => ({ ...prev, [templateId]: true }));
+    const regenToastId = toast.loading(`Regenerating all captions for this template with your concept...`);
+
+    const currentMemeOption = memeOptions?.find(opt => opt.template.id === templateId);
+    const template = currentMemeOption?.template;
+
+    if (!template || !currentMemeOption) {
+      toast.error("Error: Original template data not found.", { id: regenToastId });
+      setConceptRegenerationLoading(prev => ({ ...prev, [templateId]: false }));
+      return;
+    }
+
+    const selectedPersona = personas?.find(p => p.id === selectedPersonaId);
+    const audienceName = selectedPersona ? selectedPersona.name : "general audience";
+    const audienceDescription = selectedPersona ? selectedPersona.description : null;
+    const originalGlobalUserPrompt = userPrompt; // From component state
+
+    const regenerationPromises = [];
+
+    for (const modelCaption of currentMemeOption.modelCaptions) {
+      for (const attempt of modelCaption.generationAttempts) {
+        let actualRulesText: string | undefined;
+        if (attempt.ruleSetId === "") {
+          actualRulesText = undefined;
+        } else {
+          const ruleSet = captionRuleSets?.find(rule => rule.id === attempt.ruleSetId);
+          actualRulesText = ruleSet?.rules_text;
+        }
+
+        const systemPrompt = getCaptionGenerationTestPrompt(audienceName, audienceDescription, actualRulesText);
+        let aiUserMessage = `Original User Idea (if any): "${originalGlobalUserPrompt || "Create general captions for this meme template."}"\n\n`;
+        aiUserMessage += `Template Name: ${template.name}\n`;
+        aiUserMessage += `Template Instructions: ${template.instructions || 'None'}\n\n`;
+        aiUserMessage += `Now, please generate a new set of 5 captions.\n`;
+        aiUserMessage += `For these new captions, I want you to specifically explore this theme/concept: "${sharedConcept}"\n\n`;
+        aiUserMessage += `Ensure these new captions are still appropriate for the ${audienceName} and strictly follow the captioning rules previously established (which are part of your system instructions).`;
+        
+        const apiRequestBody = {
+          model: modelCaption.modelId,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: aiUserMessage }
+          ],
+          temperature: 0.7, 
+        };
+
+        const promise = fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(apiRequestBody)
+        })
+        .then(async response => {
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: "Failed to parse error response" }));
+            throw new Error(errorData.error || `API error for ${modelCaption.modelId}/${attempt.ruleSetName}: ${response.status}`);
+          }
+          const result = await response.json();
+          let newCaptions: string[] = [];
+          try {
+            const responseText = result.response;
+            let jsonString = responseText;
+            if (jsonString.includes('```')) {
+              const match = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+              if (match && match[1]) jsonString = match[1].trim();
+            }
+            const parsedContent = JSON.parse(jsonString);
+            if (parsedContent.captions && Array.isArray(parsedContent.captions)) {
+              newCaptions = parsedContent.captions;
+            } else if (Array.isArray(parsedContent)) {
+              newCaptions = parsedContent;
+            } else {
+              throw new Error("Unexpected AI response format during regeneration");
+            }
+            newCaptions = newCaptions.slice(0, 5);
+          } catch (e: any) {
+            console.error(`Error parsing regenerated captions for ${modelCaption.modelId}/${attempt.ruleSetName}:`, e);
+            // Return error status for this specific attempt to be handled later
+            return { modelId: modelCaption.modelId, ruleSetId: attempt.ruleSetId, error: e.message || "Failed to parse AI response", captions: [] }; 
+          }
+          return { modelId: modelCaption.modelId, ruleSetId: attempt.ruleSetId, captions: newCaptions, error: null };
+        })
+        .catch(error => {
+          console.error(`Error regenerating captions for ${modelCaption.modelId}/${attempt.ruleSetName}:`, error);
+          return { modelId: modelCaption.modelId, ruleSetId: attempt.ruleSetId, error: error.message || "Generation failed", captions: [] };
+        });
+        regenerationPromises.push(promise);
+      }
+    }
+
+    try {
+      const results = await Promise.allSettled(regenerationPromises);
+      
+      setMemeOptions(prevMemeOptions => {
+        if (!prevMemeOptions) return null;
+        return prevMemeOptions.map(opt => {
+          if (opt.template.id === templateId) {
+            const newModelCaptions = opt.modelCaptions.map(mc => {
+              const newGenerationAttempts = mc.generationAttempts.map(att => {
+                const matchingResult = results.find(r => 
+                  r.status === 'fulfilled' && 
+                  r.value.modelId === mc.modelId && 
+                  r.value.ruleSetId === att.ruleSetId
+                );
+                if (matchingResult && matchingResult.status === 'fulfilled') {
+                  return { 
+                    ...att, 
+                    captions: matchingResult.value.captions, 
+                    error: matchingResult.value.error || undefined 
+                  };
+                }
+                // Handle rejected promises or errors returned from fulfilled promises
+                const failedResult = results.find(r => 
+                    (r.status === 'rejected' || (r.status === 'fulfilled' && r.value.error)) && 
+                    ((r.status === 'rejected' && r.reason?.modelId === mc.modelId && r.reason?.ruleSetId === att.ruleSetId) || // for rejected
+                     (r.status === 'fulfilled' && r.value.modelId === mc.modelId && r.value.ruleSetId === att.ruleSetId && r.value.error)) // for fulfilled with error property
+                );
+                if (failedResult) {
+                    let errorMessage = "Regeneration failed for this set.";
+                    if (failedResult.status === 'rejected') {
+                        // Now TypeScript knows r is PromiseRejectedResult, so r.reason is safe to access
+                        const rejectedResult = failedResult as PromiseRejectedResult;
+                        errorMessage = rejectedResult.reason?.message || errorMessage;
+                    } else if (failedResult.status === 'fulfilled') {
+                        // failedResult.value is safe, and we already checked failedResult.value.error exists
+                        errorMessage = failedResult.value.error || errorMessage;
+                    }
+                    return { ...att, captions: [], error: errorMessage };
+                }
+                return att; // Should not happen if all results are processed
+              });
+              return { ...mc, generationAttempts: newGenerationAttempts };
+            });
+            return { ...opt, modelCaptions: newModelCaptions };
+          }
+          return opt;
+        });
+      });
+
+      // Check if any individual regeneration failed to provide a more nuanced toast message
+      const  hasAnyError = results.some(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.error));
+      if (hasAnyError) {
+          toast.error("Some captions could not be regenerated. Check individual sets for errors.", { id: regenToastId, duration: 5000 });
+      } else {
+          toast.success("All captions regenerated with your new concept!", { id: regenToastId });
+      }
+      setConceptInputs(prev => ({ ...prev, [templateId]: "" })); // Clear input on success/partial success
+
+    } catch (overallError: any) { // Should ideally not be reached if promises handle their errors
+      console.error("Overall error during concept regeneration processing:", overallError);
+      toast.error("A critical error occurred while processing regenerated captions.", { id: regenToastId });
+    } finally {
+      setConceptRegenerationLoading(prev => ({ ...prev, [templateId]: false }));
+    }
+  };
+  // --- End Template-Level Concept Exploration Handler ---
+
   // --- Rendering Logic --- 
 
   // Render MemeGenerator when template and caption are selected
@@ -953,24 +1123,53 @@ export default function MemeSelectorV2() {
                           {attempt.error && (
                             <div className="bg-red-900 border border-red-700 p-2 rounded text-sm text-red-300 mb-2">Error: {attempt.error}</div>
                           )}
-                          {attempt.captions.length === 0 && !attempt.error && (
-                             <div className="p-2 text-sm text-gray-400 mb-2">No captions generated.</div> // Changed from Generating
-                          )}
-                          {attempt.captions.length > 0 && (
+
+                          {/* Shimmer effect or actual captions */}
+                          {conceptRegenerationLoading[option.template.id] ? (
                             <div className="space-y-2">
-                              {attempt.captions.map((caption, index) => (
-                                <button
-                                  key={index} // Index is now relative to this attempt's captions (0-4)
-                                  onClick={() => handleSelectCaption(option.template, caption)}
-                                  className="w-full text-left p-3 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors duration-150 hover:border-blue-500 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-800 flex items-start gap-2"
-                                  title="Select this caption"
-                                >
-                                  {/* Numbering resets for each rule set (1-5) */}
-                                  <span className="flex-shrink-0 w-5 h-5 mt-0.5 flex items-center justify-center rounded-full bg-blue-900 text-blue-300 text-xs font-semibold">{index + 1}</span>
-                                  <span className="flex-grow">{caption}</span>
-                                </button>
+                              {[...Array(attempt.captions.length || 3)].map((_, i) => ( // Show shimmer for existing count or 3 if none
+                                <div key={`shimmer-${i}`} className="w-full h-[40px] p-3 bg-gray-700 rounded animate-pulse"></div>
                               ))}
                             </div>
+                          ) : (
+                            <> {/* Use a fragment if attempt.captions.length === 0 && !attempt.error might render nothing else otherwise */} 
+                              {attempt.captions.length === 0 && !attempt.error && (
+                                <div className="p-2 text-sm text-gray-400 mb-2">No captions generated.</div> // Changed from Generating
+                              )}
+                              {attempt.captions.length > 0 && (
+                                <div className="space-y-2">
+                                  {attempt.captions.map((caption, index) => {
+                                    const templateIdForConcept = option.template.id; // Capture templateId for use in icon's onClick
+                                    return (
+                                      <div key={index} className="group relative">
+                                        <button
+                                          onClick={() => handleSelectCaption(option.template, caption)}
+                                          className="w-full text-left p-3 pr-8 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors duration-150 hover:border-blue-500 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-800 flex items-start gap-2"
+                                          title="Select this caption"
+                                        >
+                                          <span className="flex-shrink-0 w-5 h-5 mt-0.5 flex items-center justify-center rounded-full bg-blue-900 text-blue-300 text-xs font-semibold">{index + 1}</span>
+                                          <span className="flex-grow">{caption}</span>
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setConceptInputs(prev => ({ ...prev, [templateIdForConcept]: caption }));
+                                            toast.success('Caption copied to concept input below!', { duration: 2000 });
+                                            // Optional: Scroll to the concept input
+                                            document.getElementById(`concept-input-${templateIdForConcept}`)?.focus();
+                                          }}
+                                          className="absolute bottom-1 left-1 p-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-150 bg-gray-600 hover:bg-gray-500 rounded-full text-white"
+                                          title="Use this caption as concept"
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       ))}
@@ -1027,6 +1226,40 @@ export default function MemeSelectorV2() {
                     </p>
                 </div>
                 {/* --- End Instructions Display --- */}
+
+                {/* --- NEW Template-Level Concept Exploration UI --- */}
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">Refine All Captions with a New Concept:</h4>
+                  <textarea
+                    value={conceptInputs[option.template.id] || ""}
+                    onChange={(e) => {
+                      const newText = e.target.value;
+                      setConceptInputs(prev => ({ ...prev, [option.template.id]: newText }));
+                    }}
+                    placeholder={`Enter a new concept to regenerate all captions for "${option.template.name}"...`}
+                    className="w-full p-2 text-sm border border-gray-600 bg-gray-700 text-white rounded-md focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                    rows={3}
+                    disabled={conceptRegenerationLoading[option.template.id]}
+                    id={`concept-input-${option.template.id}`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault(); // Prevent newline
+                        // Check disabled conditions before calling handler, similar to the button itself
+                        if (!conceptRegenerationLoading[option.template.id] && (conceptInputs[option.template.id] || "").trim()) {
+                          handleRegenerateAllCaptionsForTemplateWithConcept(option.template.id);
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => handleRegenerateAllCaptionsForTemplateWithConcept(option.template.id)}
+                    disabled={conceptRegenerationLoading[option.template.id] || !(conceptInputs[option.template.id] || "").trim()}
+                    className="mt-2 w-full py-1.5 px-3 text-xs bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {conceptRegenerationLoading[option.template.id] ? 'Regenerating All...' : 'Regenerate All with New Concept'}
+                  </button>
+                </div>
+                {/* --- END NEW Template-Level Concept Exploration UI --- */}
 
               </div>
             ))}
