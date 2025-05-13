@@ -119,7 +119,9 @@ def download_video(url, output_dir="videos"):
         if os.path.exists(video_path):
             return video_path
     else:
-        print(f"Error downloading video: {error}")
+        # Print the detailed error message from download_reel (which contains yt-dlp stderr)
+        # to sys.stderr so it doesn't interfere with JSON output on stdout.
+        print(f"Error downloading video: {error}", file=sys.stderr)
     return None
 
 def main():
