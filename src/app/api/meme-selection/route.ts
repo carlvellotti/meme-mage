@@ -1,91 +1,62 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
-import { generateEmbedding, cosineSimilarity } from '@/lib/utils/embeddings';
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server'; // Using server client
 import { MemeTemplate } from '@/lib/supabase/types';
+// OpenAI import might not be strictly needed here anymore if not generating embeddings
+// import { OpenAI } from 'openai'; 
+import { z } from 'zod';
 
-// Use environment variables with error checking
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set');
-}
-
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set');
-}
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Define Zod schema for request body validation
+const MemeSelectionSchema = z.object({
+  // Prompt is still received as AIMemeSelector sends it, but not used for vector search here.
+  // It will be used by AIMemeSelector for the subsequent AI captioning step.
+  prompt: z.string().min(1, { message: "Prompt cannot be empty (even if not used for vector search here)" }),
+  isGreenscreenMode: z.boolean().optional(),
+  audience: z.string().optional(), 
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const supabase = createClient();
+
+  let body;
   try {
-    const { prompt, isGreenscreenMode } = await req.json();
-    console.log('Processing prompt:', prompt, 'Greenscreen mode:', isGreenscreenMode);
+    body = await req.json();
+  } catch (error) {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
 
-    // First check if we have any templates at all
-    const { data: allTemplates, error: checkError } = await supabase
-      .from('meme_templates')
-      .select('id, name, embedding')
-      .eq('is_greenscreen', isGreenscreenMode);
-    
-    console.log('Total matching templates:', allTemplates?.length);
+  const validationResult = MemeSelectionSchema.safeParse(body);
 
-    // Generate embedding for the user's prompt
-    const promptEmbedding = await generateEmbedding(prompt);
-    console.log('Generated embedding successfully');
+  if (!validationResult.success) {
+    return NextResponse.json({ error: 'Invalid request parameters', details: validationResult.error.flatten() }, { status: 400 });
+  }
 
-    // Add more detailed logging
-    console.log('Calling match_meme_templates with params:', {
-      embedding_length: promptEmbedding.length,
-      match_threshold: 0.0,
-      match_count: 5,
-      is_greenscreen_filter: isGreenscreenMode
-    });
+  const { isGreenscreenMode, prompt } = validationResult.data; // Keep prompt for logging context
+  const matchCount = 5; 
 
-    // Query templates using vector similarity, adding greenscreen filter
-    const { data: templates, error } = await supabase
-      .rpc('match_meme_templates', {
-        query_embedding: promptEmbedding,
-        match_threshold: 0.0,
-        match_count: 5,
-        is_greenscreen_filter: isGreenscreenMode
+  console.log(`[API /meme-selection] Request for prompt: "${prompt}", Greenscreen: ${isGreenscreenMode}, Fetching ${matchCount} random templates.`);
+
+  try {
+    const { data: templates, error: rpcError } = await supabase
+      .rpc('get_random_reviewed_templates_for_ai_selector', {
+        match_count: matchCount,
+        is_greenscreen_filter: isGreenscreenMode ?? null, 
       });
 
-    if (error) {
-      console.error('RPC error:', error);
-      throw error;
+    if (rpcError) {
+      console.error('Supabase RPC error in meme-selection (random fetch):', rpcError);
+      return NextResponse.json({ error: 'Failed to fetch random templates via RPC', details: rpcError.message }, { status: 500 });
     }
 
-    console.log('Templates returned from similarity search:', templates?.length || 0);
+    if (!templates) {
+        console.log('[API /meme-selection] RPC returned null, sending empty templates array.');
+        return NextResponse.json({ templates: [] });
+    }
     
-    // If no matches, use fallback with greenscreen filter
-    if (!templates || templates.length === 0) {
-      console.log('No templates found, using fallback');
-      const { data: fallbackTemplates, error: fallbackError } = await supabase
-        .from('meme_templates')
-        .select('*')
-        .eq('is_greenscreen', isGreenscreenMode)
-        .limit(5);
-
-      if (fallbackError) throw fallbackError;
-      if (!fallbackTemplates || fallbackTemplates.length === 0) {
-        throw new Error('No matching templates available');
-      }
-
-      return NextResponse.json({ templates: fallbackTemplates });
-    }
-
-    if (templates && templates.length > 0) {
-      return NextResponse.json({ templates });
-    }
+    console.log(`[API /meme-selection] Successfully fetched ${templates.length} random templates:`, templates.map((t: MemeTemplate) => ({ id: t.id, name: t.name })));
+    return NextResponse.json({ templates });
 
   } catch (error: any) {
-    console.error('Error in meme selection:', error);
+    console.error('Error in POST /api/meme-selection (random fetch):', error);
     return NextResponse.json(
       { error: 'Failed to process meme selection', details: error.message },
       { status: 500 }
