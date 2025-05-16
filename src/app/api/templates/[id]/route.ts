@@ -70,7 +70,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Missing template ID' }, { status: 400 });
   }
 
-  const { name, instructions, reviewed, is_duplicate } = body;
+  const { name, instructions, reviewed, is_duplicate, category } = body;
 
   // Basic validation
   if (name !== undefined && typeof name !== 'string') {
@@ -85,6 +85,9 @@ export async function PATCH(
    if (is_duplicate !== undefined && typeof is_duplicate !== 'boolean') {
        return NextResponse.json({ error: 'Invalid is_duplicate format' }, { status: 400 });
    }
+   if (category !== undefined && category !== null && typeof category !== 'string') {
+       return NextResponse.json({ error: 'Invalid category format' }, { status: 400 });
+   }
 
   const updateData: { [key: string]: any } = {};
   let reEmbeddingError: string | null = null;
@@ -97,6 +100,9 @@ export async function PATCH(
   }
   if (is_duplicate !== undefined) {
       updateData.is_duplicate = is_duplicate; // Typically only set to true via this endpoint for marking duplicates
+  }
+  if (category !== undefined) {
+      updateData.category = category;
   }
 
   // Handle instructions update and re-vectorization
