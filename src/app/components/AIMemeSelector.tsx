@@ -55,8 +55,10 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
 
     setIsLoading(true);
     setShowInitialForm(false);
+    setMeme(null); // Reset previous meme output
+    console.log('[AIMemeSelector] Submitting - Prompt:', prompt, 'Audience:', audience, 'Greenscreen:', isGreenscreenMode);
+
     try {
-      // Get relevant templates using vector similarity
       const response = await fetch('/api/meme-selection', {
         method: 'POST',
         headers: {
@@ -71,10 +73,19 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
 
       if (!response.ok) {
         const errorData = await response.json();
+        toast.error(errorData.error || errorData.details || 'Failed to get initial templates');
         throw new Error(errorData.error || errorData.details || 'Failed to get templates');
       }
 
       const { templates: fetchedTemplates } = await response.json();
+      console.log('[AIMemeSelector] Received initial templates from API:', fetchedTemplates.map((t: MemeTemplate) => ({id: t.id, name: t.name})));
+
+      if (!fetchedTemplates || fetchedTemplates.length === 0) {
+        toast.error("No suitable templates found for your idea. Try a different prompt!");
+        setShowInitialForm(true);
+        setIsLoading(false);
+        return;
+      }
       
       const templatesWithIndices = fetchedTemplates.map((template: MemeTemplate, index: number) => ({
         ...template,
@@ -85,204 +96,89 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
         `${template.originalIndex}. ${template.name}\nInstructions: ${template.instructions || 'No specific instructions'}`
       ).join('\n');
 
-      console.log('=== DEBUG: Meme Generation Process ===');
-      console.log('Prompt:', prompt);
-      console.log('Audience:', audience || 'general audience');
-      console.log('Greenscreen Mode:', isGreenscreenMode);
-      console.log('Templates Count:', templatesWithIndices.length);
-      console.log('Selected Model:', selectedModel);
-      console.log('Model ID:', selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20241022' : 'claude-3-7-sonnet-20250219');
+      console.log('[AIMemeSelector] DEBUG: Meme Generation Process Start');
+      console.log('[AIMemeSelector] User Prompt:', prompt);
+      console.log('[AIMemeSelector] Target Audience:', audience || 'general audience');
+      console.log('[AIMemeSelector] Greenscreen Mode:', isGreenscreenMode);
+      console.log('[AIMemeSelector] Number of initial templates for AI:', templatesWithIndices.length);
+      console.log('[AIMemeSelector] Selected AI Model for captioning:', selectedModel);
+      // Model ID logic seems specific to older Claude versions, adjust if necessary for current setup
+      // console.log('[AIMemeSelector] Model ID for API:', selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20241022' : 'claude-3-7-sonnet-20250219'); 
 
-      // Try the tool-based endpoint first
-      try {
-        console.log('Attempting tool-based template selection...');
-        
-        // If OpenAI is selected, use the OpenAI endpoint
-        if (selectedModel === 'openai') {
-          const openaiResponse = await fetch('/api/openai/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [{
-                role: 'user',
-                content: `I want to create a meme with this idea: "${prompt}"\n\nAvailable templates:\n${templatesText}`,
-                audience: audience || 'general audience'
-              }]
-            }),
-          });
+      // Tool-based selection / captioning logic (Anthropic or OpenAI)
+      let aiApiResponse: Response;
+      const messagesForAI = [{
+        role: 'user',
+        content: `I want to create a meme with this idea: "${prompt}"\n\nAvailable templates:\n${templatesText}`,
+        audience: audience || 'general audience'
+      }];
+
+      if (selectedModel === 'openai') {
+        console.log('[AIMemeSelector] Calling OpenAI for caption generation...');
+        aiApiResponse = await fetch('/api/openai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: messagesForAI }), // Ensure this matches /api/openai/chat expected structure
+        });
+      } else { // 'anthropic' or 'anthropic-3-5'
+        const modelForAnthropic = selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20240620' : 'claude-3-opus-20240229'; // Example model IDs, ensure they are current
+        console.log(`[AIMemeSelector] Calling Anthropic (${modelForAnthropic}) for caption generation...`);
+        // Assuming /api/anthropic/tool-selection is the correct endpoint for tool use
+        aiApiResponse = await fetch('/api/anthropic/tool-selection', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: messagesForAI,
+            model: modelForAnthropic 
+          }),
+        });
+      }
           
-          if (openaiResponse.ok) {
-            console.log('OpenAI template selection succeeded!');
-            const data: AIResponse = await openaiResponse.json();
+      if (!aiApiResponse.ok) {
+        const errorData = await aiApiResponse.json();
+        toast.error(errorData.error || 'AI caption generation failed');
+        throw new Error(errorData.error || 'AI caption generation failed');
+      }
             
-            // Map both templates to their full data
-            const selectedTemplates = data.templates.map((templateData: TemplateResponse) => {
-              const selectedTemplate = templatesWithIndices.find(
-                (t: TemplateWithIndex) => t.originalIndex === templateData.template
-              );
-              
-              if (!selectedTemplate) {
-                throw new Error(`Could not find template ${templateData.template}`);
-              }
-              
-              return {
-                template: selectedTemplate,
-                captions: templateData.captions
-              };
-            });
+      const data: AIResponse = await aiApiResponse.json();
+      console.log('[AIMemeSelector] AI Response (selected templates and captions):', data);
             
-            setMeme({
-              templates: selectedTemplates
-            });
-            return; // Exit early if successful
-          }
-          
-          console.warn('OpenAI template selection failed, falling back to regular endpoint');
-        } else {
-          // Make API call for templates and captions using the tool-based endpoint
-          const aiResponse = await fetch('/api/anthropic/tool-selection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [{
-                role: 'user',
-                content: `I want to create a meme with this idea: "${prompt}"\n\nAvailable templates:\n${templatesText}`,
-                audience: audience || 'general audience'
-              }],
-              model: selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20241022' : 'claude-3-7-sonnet-20250219'
-            }),
-          });
-
-          if (aiResponse.ok) {
-            console.log('Tool-based template selection succeeded!');
-            const data: AIResponse = await aiResponse.json();
-            console.log('Tool-based response templates:', data.templates.length);
-            
-            // Map both templates to their full data
-            const selectedTemplates = data.templates.map((templateData: TemplateResponse) => {
-              console.log('Looking for template number:', templateData.template);
-              console.log('Available templates:', templatesWithIndices.map((t: TemplateWithIndex) => ({
-                index: t.originalIndex,
-                name: t.name
-              })));
-
-              const selectedTemplate = templatesWithIndices.find(
-                (t: TemplateWithIndex) => t.originalIndex === templateData.template
-              );
-              
-              if (!selectedTemplate) {
-                throw new Error(`Could not find template ${templateData.template}`);
-              }
-
-              console.log('Found template:', selectedTemplate.name);
-
-              return {
-                template: selectedTemplate,
-                captions: templateData.captions
-              };
-            });
-
-            console.log('Selected templates:', selectedTemplates.map(t => ({
-              name: t.template.name,
-              captions: t.captions
-            })));
-
-            setMeme({
-              templates: selectedTemplates
-            });
-            return; // Exit early if successful
-          }
-          
-          // If we get here, the tool-based endpoint failed
-          console.warn('Tool-based template selection failed, falling back to regular endpoint');
+      const finalSelectedTemplates = data.templates.map((templateData: TemplateResponse) => {
+        const foundTemplate = templatesWithIndices.find(
+          (t: TemplateWithIndex) => t.originalIndex === templateData.template
+        );
+        if (!foundTemplate) {
+          console.error(`[AIMemeSelector] Critical Error: AI chose template index ${templateData.template} which was not in the initial list.`);
+          // Fallback or skip this template if not found
+          return null; 
         }
-      } catch (error) {
-        console.warn('Error with tool-based endpoint:', error);
-        console.warn('Falling back to regular endpoint');
+        return {
+          template: foundTemplate,
+          captions: templateData.captions
+        };
+      }).filter(t => t !== null) as { template: MemeTemplate; captions: string[] }[]; // Filter out nulls and assert type
+
+      if (finalSelectedTemplates.length === 0 && data.templates.length > 0) {
+        toast.error("AI selected templates not found in the initial list. Please try again.");
+        setShowInitialForm(true);
+        setIsLoading(false);
+        return;
       }
       
-      // Fallback to regular endpoint
-      try {
-        console.log('Using fallback (non-tool) endpoint for template selection...');
-        
-        let fallbackResponse;
-        
-        if (selectedModel === 'openai') {
-          fallbackResponse = await fetch('/api/openai/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [{
-                role: 'user',
-                content: `I want to create a meme with this idea: "${prompt}"\n\nAvailable templates:\n${templatesText}`,
-                audience: audience || 'general audience'
-              }]
-            }),
-          });
-        } else {
-          fallbackResponse = await fetch('/api/anthropic/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [{
-                role: 'user',
-                content: `I want to create a meme with this idea: "${prompt}"\n\nAvailable templates:\n${templatesText}`,
-                audience: audience || 'general audience'
-              }],
-              model: selectedModel === 'anthropic-3-5' ? 'claude-3-5-sonnet-20241022' : 'claude-3-7-sonnet-20250219'
-            }),
-          });
-        }
-        
-        if (!fallbackResponse.ok) {
-          console.error('Fallback endpoint failed with status:', fallbackResponse.status);
-          throw new Error('Failed to get AI response from fallback endpoint');
-        }
-        
-        console.log('Fallback endpoint succeeded!');
-        const data: AIResponse = await fallbackResponse.json();
-        console.log('Fallback response templates:', data.templates.length);
-        
-        // Map both templates to their full data
-        const selectedTemplates = data.templates.map((templateData: TemplateResponse) => {
-          console.log('Looking for template number:', templateData.template);
-          console.log('Available templates:', templatesWithIndices.map((t: TemplateWithIndex) => ({
-            index: t.originalIndex,
-            name: t.name
-          })));
+      console.log('[AIMemeSelector] Final processed selections for display:', finalSelectedTemplates.map(st => ({ name: st.template.name, captions: st.captions })));
+      setMeme({
+        templates: finalSelectedTemplates
+      });
 
-          const selectedTemplate = templatesWithIndices.find(
-            (t: TemplateWithIndex) => t.originalIndex === templateData.template
-          );
-          
-          if (!selectedTemplate) {
-            throw new Error(`Could not find template ${templateData.template}`);
-          }
-
-          console.log('Found template:', selectedTemplate.name);
-
-          return {
-            template: selectedTemplate,
-            captions: templateData.captions
-          };
-        });
-
-        console.log('Selected templates:', selectedTemplates.map(t => ({
-          name: t.template.name,
-          captions: t.captions
-        })));
-
-        setMeme({
-          templates: selectedTemplates
-        });
-      } catch (error) {
-        console.error('Error with fallback endpoint:', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to generate meme');
-        setShowInitialForm(true);
-      }
     } catch (error) {
-      console.error('Error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to generate meme');
+      console.error('[AIMemeSelector] Error in handleSubmit:', error);
+      // Check if error is an instance of Error before accessing message property
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      // Toast error only if it hasn't been handled by more specific toasts above
+      if (!((error instanceof Error && error.message.includes('Failed to get initial templates')) || 
+            (error instanceof Error && error.message.includes('AI caption generation failed')))){
+        toast.error(errorMessage);
+      }
       setShowInitialForm(true);
     } finally {
       setIsLoading(false);
@@ -366,17 +262,19 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
               className="w-full p-2 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500"
             >
               <option value="anthropic-3-5">Claude 3.5 Sonnet</option>
-              <option value="anthropic">Claude 3.7 Sonnet</option>
-              <option value="openai">GPT-4</option>
+              {/* <option value="anthropic">Claude 3 Opus</option> */}
+              {/* Consider updating available models based on current API capabilities */}
+              <option value="anthropic">Claude 3 Opus / Latest Sonnet via Tool Use</option> 
+              <option value="openai">GPT-4 (OpenAI)</option>
             </select>
           </div>
 
           <button
             type="submit"
-            disabled={!prompt.trim()}
+            disabled={!prompt.trim() || isLoading}
             className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed"
           >
-            Generate with AI
+            {isLoading ? 'Generating...' : 'Generate with AI'}
           </button>
         </form>
       ) : meme && (
@@ -411,6 +309,25 @@ export default function AIMemeSelector({ onSelectTemplate, isGreenscreenMode, on
               </div>
             </div>
           ))}
+           {meme.templates.length > 0 && (
+            <button 
+              onClick={() => {setShowInitialForm(true); setMeme(null);}} 
+              className="md:col-span-2 w-full mt-4 py-2 px-4 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              Start Over
+            </button>
+          )}
+        </div>
+      )}
+      {isLoading && !meme && (
+         <div className="flex flex-col items-center justify-center py-2 relative">
+            <div className="relative">
+              <BackgroundSVG width={300} height={300} />
+              <div style={{ marginTop: '-30px' }}>
+                <SpinningOrb width={240} height={240} color={{ r: 70, g: 140, b: 255 }} />
+              </div>
+            </div>
+            <p className="mt-24 text-gray-300">Conjuring memes...</p>
         </div>
       )}
     </div>
