@@ -11,6 +11,7 @@ const TemplateSelectSchema = z.object({
   count: z.number().int().positive().max(10).default(3), // Default to 3, max 10
   isGreenscreenMode: z.boolean().optional(),
   persona_id: z.string().uuid().optional().nullable(), // <<< Added persona_id
+  category: z.string().optional().nullable(), // <-- Added category to schema
 });
 
 // Optional: Consider Edge Runtime for performance
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { prompt, count, isGreenscreenMode, persona_id } = validationResult.data;
+    const { prompt, count, isGreenscreenMode, persona_id, category } = validationResult.data;
 
     let templates: MemeTemplate[] | null = null;
     let error: any = null;
@@ -71,7 +72,8 @@ export async function POST(request: Request) {
           match_count_param: count,
           filter_greenscreen_param: isGreenscreenMode,
           user_id_param: userId,          // Pass user ID
-          persona_id_param: persona_id    // Pass persona ID (can be null)
+          persona_id_param: persona_id,    // Pass persona ID (can be null)
+          filter_category_param: category, // <-- Added category to RPC params for match
         };
 
         const { data: matchedData, error: matchError } = await supabase.rpc(
@@ -94,10 +96,11 @@ export async function POST(request: Request) {
         // Ensure all parameters expected by the SQL function are included here
         // and match the order suggested by the error hint.
         rpcParams = {
-          filter_greenscreen: isGreenscreenMode ?? null, // Default to null if undefined
-          limit_count: count, 
+          filter_greenscreen_param: isGreenscreenMode ?? null, // <-- Renamed to match hint
+          limit_count_param: count,  // <-- Renamed to match hint
           user_id_param: userId,         
-          persona_id_param: persona_id   
+          persona_id_param: persona_id,   
+          filter_category: category, 
         };
         
         const { data: randomData, error: randomError } = await supabase.rpc(

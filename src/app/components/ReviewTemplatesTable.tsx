@@ -17,6 +17,7 @@ interface MemeTemplate {
   original_source_url?: string | null;
   reviewed?: boolean | null;
   uploader_name?: string | null; // Added uploader name field
+  category?: string | null; // <-- Added category
   // Add other relevant fields as needed from the actual type
 }
 
@@ -306,6 +307,7 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
 // --- End Edit Template Modal Component ---
 
 const REVIEW_LIMIT = 10; // Items per page for review table
+const AVAILABLE_CATEGORIES = ['gym']; // <-- Added available categories
 
 const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({ 
     className,
@@ -329,6 +331,9 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [currentPreviewTemplate, setCurrentPreviewTemplate] = useState<MemeTemplate | null>(null);
 
+  // State for pending category updates
+  const [pendingCategoryUpdates, setPendingCategoryUpdates] = useState<Record<string, string | null>>({});
+
   const fetchUnreviewedTemplates = async (pageToFetch = 1, loadMore = false) => {
     console.log(`Fetching unreviewed templates: page=${pageToFetch}, loadMore=${loadMore}`);
     
@@ -338,6 +343,7 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
         setIsLoading(true);
         setUnreviewedTemplates([]); // Clear existing on refresh/initial
         setCurrentPage(1); // Reset page on refresh/initial
+        setPendingCategoryUpdates({}); // Reset pending updates on refresh
     }
     setError(null);
 
@@ -491,31 +497,43 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
   // Just approves the template and removes from list
   const handleApproveOnly = async (templateId: string): Promise<void> => {
       const template = unreviewedTemplates.find(t => t.id === templateId);
-      if (!template) return Promise.reject(new Error("Template not found locally")); // Should not happen
+      if (!template) return Promise.reject(new Error("Template not found locally"));
 
-      console.log('Approving template:', templateId);
+      // Determine the category to save: use pending update, or existing, or null
+      const categoryToSave = pendingCategoryUpdates.hasOwnProperty(templateId)
+        ? (pendingCategoryUpdates[templateId] === "" ? null : pendingCategoryUpdates[templateId])
+        : (template.category === "" ? null : template.category);
+
+      console.log(`Approving template: ${templateId} with category: ${categoryToSave}`);
 
       return new Promise(async (resolve, reject) => {
           try {
               const approveResponse = await fetch(`/api/templates/${templateId}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ reviewed: true }),
+                  body: JSON.stringify({ reviewed: true, category: categoryToSave }), // Add category to payload
               });
 
               if (!approveResponse.ok) {
                   const errorData = await approveResponse.json();
-                  throw new Error(errorData.error || `Failed to approve template (Status: ${approveResponse.status})`);
+                  // Throw a more specific error if available, otherwise generic
+                  const specificError = errorData.error || errorData.message;
+                  throw new Error(specificError || `Failed to approve template (Status: ${approveResponse.status})`);
               }
               console.log('Approval successful.');
 
-              // Remove from local state
+              // Remove from local state and clear its pending category update
               setUnreviewedTemplates(prev => prev.filter(t => t.id !== templateId));
+              setPendingCategoryUpdates(prev => {
+                const newUpdates = {...prev};
+                delete newUpdates[templateId];
+                return newUpdates;
+              });
               toast.success(`Template "${template.name}" approved!`);
               resolve();
           } catch (err: any) {
               console.error('Approval failed:', err);
-              toast.error(`Approval failed: ${err.message}`);
+              toast.error(`Approval failed: ${err.message}`); // Display the specific error message
               reject(err);
           }
       });
@@ -716,6 +734,7 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
                     <th className="px-4 py-2 font-medium w-24">Preview</th>
                     <th className="px-4 py-2 font-medium">Name</th>
                     <th className="px-4 py-2 font-medium">Instructions</th>
+                    <th className="px-4 py-2 font-medium w-28">Category</th>                  
                     <th className="px-4 py-2 font-medium">Source</th>
                     <th className="px-4 py-2 font-medium min-w-[200px]">Actions</th>
                   </tr>
@@ -765,6 +784,24 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
                             {template.instructions || <span className="italic text-gray-500">No instructions provided. Click to add.</span>}
                           </p>
                         </div>
+                      </td>
+                      {/* Category Column - NEW */} 
+                      <td className="px-4 py-2 align-top">
+                        <select 
+                          value={pendingCategoryUpdates[template.id] ?? template.category ?? ""} 
+                          onChange={(e) => {
+                            setPendingCategoryUpdates(prev => ({
+                              ...prev,
+                              [template.id]: e.target.value === "" ? null : e.target.value 
+                            }));
+                          }}
+                          className="w-full p-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                        >
+                          <option value="">None</option>
+                          {AVAILABLE_CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+                          ))}
+                        </select>
                       </td>
                       {/* Source Column */}
                        <td className="px-4 py-2 align-top text-gray-400">

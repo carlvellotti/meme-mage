@@ -16,6 +16,7 @@ import BackgroundSVG from './BackgroundSVG'; // <-- Import BackgroundSVG
 const LOCALSTORAGE_PERSONA_ID_KEY = 'memeSelectorV2_selectedPersonaId';
 const LOCALSTORAGE_RULE_SET_ID_KEY = 'memeSelectorV2_selectedRuleSetId';
 const LOCALSTORAGE_RULE_SET_ID_KEY_2 = 'memeSelectorV2_selectedRuleSetId2'; // New key for second rule set
+const LOCALSTORAGE_CATEGORY_KEY = 'memeSelectorV2_selectedCategory'; // <-- New key for category
 
 // Define the Persona type (should match PersonaManager)
 interface Persona {
@@ -105,6 +106,7 @@ export default function MemeSelectorV2() {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(''); // Store selected persona ID
   const [selectedRuleSetId, setSelectedRuleSetId] = useState<string>(''); // Store selected rule set ID ('' for default)
   const [selectedRuleSetId2, setSelectedRuleSetId2] = useState<string>(''); // Store selected second rule set ID ('' for none)
+  const [selectedCategory, setSelectedCategory] = useState<string>(''); // <-- New state for category
   const [userPrompt, setUserPrompt] = useState<string>(''); // Optional prompt
   const [isGreenscreenMode, setIsGreenscreenMode] = useState<boolean>(false); // Greenscreen mode state
   const [isLoadingTemplates, setIsLoadingTemplates] = useState<boolean>(false);
@@ -158,6 +160,7 @@ export default function MemeSelectorV2() {
     const savedPersonaId = localStorage.getItem(LOCALSTORAGE_PERSONA_ID_KEY);
     const savedRuleSetId = localStorage.getItem(LOCALSTORAGE_RULE_SET_ID_KEY);
     const savedRuleSetId2 = localStorage.getItem(LOCALSTORAGE_RULE_SET_ID_KEY_2); // Load second rule set ID
+    const savedCategory = localStorage.getItem(LOCALSTORAGE_CATEGORY_KEY); // <-- Load category
     if (savedPersonaId) {
       setSelectedPersonaId(savedPersonaId);
     }
@@ -166,6 +169,9 @@ export default function MemeSelectorV2() {
     }
     if (savedRuleSetId2) { // Set second rule set state
       setSelectedRuleSetId2(savedRuleSetId2);
+    }
+    if (savedCategory) { // <-- Set category state
+      setSelectedCategory(savedCategory);
     }
     // Run only once on mount
   }, []); 
@@ -199,6 +205,15 @@ export default function MemeSelectorV2() {
       localStorage.removeItem(LOCALSTORAGE_RULE_SET_ID_KEY_2);
     }
   }, [selectedRuleSetId2]);
+
+  // Effect to save selected category to localStorage
+  useEffect(() => {
+    if (selectedCategory) {
+      localStorage.setItem(LOCALSTORAGE_CATEGORY_KEY, selectedCategory);
+    } else {
+      localStorage.removeItem(LOCALSTORAGE_CATEGORY_KEY);
+    }
+  }, [selectedCategory]);
 
   // Effect to handle zero personas case
   useEffect(() => {
@@ -561,6 +576,7 @@ export default function MemeSelectorV2() {
       prompt: userPrompt.trim() || undefined,
       persona_id: selectedPersonaId,
       isGreenscreenMode: isGreenscreenMode,
+      category: selectedCategory || undefined, // <-- Add category to request
     };
     
     try {
@@ -631,6 +647,7 @@ export default function MemeSelectorV2() {
      setSelectedRuleSetId(''); // Reset rule set selection
      setUserPrompt('');
      setSelectedRuleSetId2(''); // Reset second rule set selection
+     setSelectedCategory(''); // <-- Reset category selection
      setIsGreenscreenMode(false); // Reset greenscreen mode
      setSelectedFinalTemplate(null);
      setSelectedFinalCaption(null);
@@ -638,6 +655,7 @@ export default function MemeSelectorV2() {
      localStorage.removeItem(LOCALSTORAGE_PERSONA_ID_KEY);
      localStorage.removeItem(LOCALSTORAGE_RULE_SET_ID_KEY);
      localStorage.removeItem(LOCALSTORAGE_RULE_SET_ID_KEY_2); // Clear second rule set storage
+     localStorage.removeItem(LOCALSTORAGE_CATEGORY_KEY); // <-- Clear category storage
   };
 
   // --- New Handlers for Edit Details Modal ---
@@ -1026,6 +1044,27 @@ export default function MemeSelectorV2() {
             </div>
             {/* Display the same error message if rule sets fail to load */}
             {ruleSetsError && <p className="text-xs text-red-400 mt-1">Error loading rule sets.</p>}
+          </div>
+
+          {/* Category Selection - NEW */} 
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Meme Category (Optional)
+            </label>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              <option value="">Any Category</option>
+              {/* Assuming AVAILABLE_CATEGORIES is defined/imported, e.g., const AVAILABLE_CATEGORIES = ['gym']; */}
+              {/* You might want to share this constant between ReviewTemplatesTable and MemeSelectorV2 */}
+              {['gym'].map((cat) => ( // Hardcoding for now, replace with AVAILABLE_CATEGORIES
+                <option key={cat} value={cat}>
+                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Meme Prompt */} 
