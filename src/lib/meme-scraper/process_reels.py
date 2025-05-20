@@ -17,12 +17,16 @@ try:
     from video_cropper import crop_video
     from caption_extractor import extract_caption
 except ImportError as e:
-    print(f"Error importing required modules: {e}")
-    print("Make sure all required scripts are in the current directory.")
+    # Output error as JSON for Node.js to potentially catch
+    print(json.dumps({"success": False, "error": f"Python script import error: {e}", "originalUrl": sys.argv[1] if len(sys.argv) > 1 else "unknown"}))
     sys.exit(1)
 
 # Import our new modules
-from storage_uploader import StorageUploader
+try:
+    from storage_uploader import StorageUploader
+except ImportError as e:
+    print(json.dumps({"success": False, "error": f"Python script import error (StorageUploader): {e}", "originalUrl": sys.argv[1] if len(sys.argv) > 1 else "unknown"}))
+    sys.exit(1)
 
 # Configure logging
 logging.basicConfig(
@@ -37,7 +41,11 @@ SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 # NODE_API_BASE_URL = os.environ.get("NODE_API_BASE_URL", "http://localhost:3000") # Default to localhost
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+    # This error will be logged, but Node.js will primarily see the JSON output (if any) or stderr.
     logger.error("FATAL: Missing Supabase environment variables (SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY).")
+    # Output error as JSON for Node.js to catch if this specific check fails early.
+    # The originalUrl might not be available yet if sys.argv is not parsed.
+    print(json.dumps({"success": False, "error": "Python script environment error: Missing Supabase credentials.", "originalUrl": sys.argv[1] if len(sys.argv) > 1 else "unknown_url_at_env_check"}))
     sys.exit(1)
 
 # ---
@@ -111,58 +119,62 @@ def process_url(url, uploader):
     video_path = None
     frame_path = None
     cropped_video_path = None
+    # Ensure originalUrl is part of the error response if url is available
+    error_response_base = {"success": False, "originalUrl": url}
+
     try:
         # Extract Instagram ID for unique naming
         instagram_id = extract_instagram_id(url)
         if not instagram_id:
             logger.error(f"Could not extract Instagram ID from URL: {url}")
+            error_response_base.update({"error": "Could not extract Instagram ID"})
+            print(json.dumps(error_response_base))
             return False
 
         logger.info(f"Processing URL: {url} with Instagram ID: {instagram_id}")
 
         # 1. Download the video
-        # (The existing download logic - assume returns path or None)
         video_path = download_video(url)
         if not video_path:
-            logger.error("Failed to download video")
-            print(json.dumps({"success": False, "error": "Failed to download video", "originalUrl": url}))
+            logger.error(f"Failed to download video for {url}")
+            error_response_base.update({"error": "Failed to download video"})
+            print(json.dumps(error_response_base))
             return False
 
         # 2. Extract a frame
-        # (The existing frame extraction logic - assume returns path or None)
         frame_path = extract_frame(video_path)
         if not frame_path:
-            logger.error("Failed to extract frame")
-            print(json.dumps({"success": False, "error": "Failed to extract frame", "originalUrl": url}))
+            logger.error(f"Failed to extract frame for {url}")
+            error_response_base.update({"error": "Failed to extract frame"})
+            print(json.dumps(error_response_base))
             return False
 
         # 3. Crop the video
-        # (The existing cropping logic - assume returns path or None)
         cropped_video_path = crop_video(video_path, frame_path)
         if not cropped_video_path:
-            logger.error("Failed to crop video")
-            print(json.dumps({"success": False, "error": "Failed to crop video", "originalUrl": url}))
+            logger.error(f"Failed to crop video for {url}")
+            error_response_base.update({"error": "Failed to crop video"})
+            print(json.dumps(error_response_base))
             return False
 
         # 4. Extract caption
-        # (The existing caption extraction logic - assume returns text or None)
         caption_text = extract_caption(frame_path)
-        logger.info(f"Extracted caption (or placeholder): {caption_text[:100]}...")
+        logger.info(f"Extracted caption (or placeholder) for {url}: {caption_text[:100] if caption_text else 'None'}...")
 
         # 5. Upload Cropped Video to Supabase Storage
-        # Upload cropped video
-        logger.info(f"Attempting to upload video from: {cropped_video_path}")
-        video_success, video_url = uploader.upload_video(cropped_video_path, instagram_id)
+        logger.info(f"Attempting to upload video from: {cropped_video_path} for {url}")
+        video_success, video_storage_url_or_error = uploader.upload_video(cropped_video_path, instagram_id)
         if not video_success:
-            logger.error(f"Failed to upload video: {video_url}")
-            print(json.dumps({"success": False, "error": f"Failed to upload video: {video_url}", "originalUrl": url}))
+            logger.error(f"Failed to upload video for {url}: {video_storage_url_or_error}")
+            error_response_base.update({"error": f"Failed to upload video: {video_storage_url_or_error}"})
+            print(json.dumps(error_response_base))
             return False
-        logger.info(f"Video uploaded successfully: {video_url}")
+        logger.info(f"Video uploaded successfully for {url}: {video_storage_url_or_error}")
 
         # 6. Print results as JSON to stdout
         result = {
             "success": True,
-            "finalVideoUrl": video_url,
+            "finalVideoUrl": video_storage_url_or_error, # uploader returns the URL on success
             "captionText": caption_text,
             "instagramId": instagram_id,
             "originalUrl": url
@@ -173,58 +185,53 @@ def process_url(url, uploader):
     except Exception as e:
         error_details = traceback.format_exc()
         logger.error(f"Error processing {url}: {e}\n{error_details}")
-        # Print failure JSON on general exception
-        print(json.dumps({"success": False, "error": f"General processing error: {str(e)}", "originalUrl": url}))
+        error_response_base.update({"error": f"General processing error for {url}: {str(e)}"})
+        print(json.dumps(error_response_base))
         return False
 
     finally:
-        # 10. Enhanced Clean up temporary files and directories
-        logger.info("Executing finally block for cleanup...")
+        logger.info(f"Executing finally block for cleanup for URL: {url}...")
         cleanup_files(video_path, frame_path, cropped_video_path)
 
 def main():
-    """Main entry point: Parses args, initializes uploader, processes URLs."""
-    urls = sys.argv[1:]
-    if not urls:
-        logger.error("Usage: python process_reels.py <url1> [url2] ...")
+    """Main entry point: Expects a single URL, initializes uploader, processes it."""
+    
+    # When called by Node.js, sys.argv will be [script_name, url]
+    if len(sys.argv) != 2:
+        logger.error("Usage: python process_reels.py <single_url>")
+        # Output JSON error message for Node.js to capture
+        print(json.dumps({"success": False, "error": "Python script usage error: Expected a single URL argument.", "originalUrl": "unknown_due_to_arg_count_error"}))
         sys.exit(1)
 
-    logger.info(f"Received {len(urls)} URLs to process.")
+    target_url = sys.argv[1].strip()
+    if not target_url:
+        logger.error("Received an empty URL.")
+        print(json.dumps({"success": False, "error": "Python script error: Received an empty URL.", "originalUrl": target_url}))
+        sys.exit(1)
+        
+    logger.info(f"Python script starting processing for single URL: {target_url}")
 
     # Initialize StorageUploader once
     try:
         uploader = StorageUploader()
-        logger.info("StorageUploader initialized successfully in main.")
-    except ValueError as e:
+        logger.info("StorageUploader initialized successfully.")
+    except ValueError as e: # Specific error for missing env vars in StorageUploader
         logger.error(f"FATAL: Failed to initialize StorageUploader: {e}")
-        logger.error("Ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_KEY env vars are set.")
+        print(json.dumps({"success": False, "error": f"Python StorageUploader init error: {e}", "originalUrl": target_url}))
         sys.exit(1)
-    except Exception as e:
+    except Exception as e: # Catch any other init errors
         logger.error(f"FATAL: Unexpected error initializing StorageUploader: {e}")
+        print(json.dumps({"success": False, "error": f"Python StorageUploader unexpected init error: {e}", "originalUrl": target_url}))
         sys.exit(1)
 
-    successful_count = 0
-    failed_count = 0
-
-    for url in urls:
-        url = url.strip()
-        if not url:
-            continue
-        
-        if process_url(url, uploader): # Pass uploader instance
-            successful_count += 1
-        else:
-            failed_count += 1
-
-    logger.info("\n--- Processing Summary ---")
-    logger.info(f"Successfully processed: {successful_count}")
-    logger.info(f"Failed to process:    {failed_count}")
-    logger.info("-------------------------")
-
-    if failed_count > 0:
-        sys.exit(1) # Exit with error code if any URL failed
+    # Process the single URL
+    # The process_url function already prints the JSON output and returns True/False
+    if process_url(target_url, uploader):
+        logger.info(f"Successfully processed URL: {target_url}")
+        sys.exit(0) # Success
     else:
-        sys.exit(0)
+        logger.error(f"Failed to process URL: {target_url}")
+        sys.exit(1) # Failure (JSON error already printed by process_url)
 
 if __name__ == "__main__":
     main() 
