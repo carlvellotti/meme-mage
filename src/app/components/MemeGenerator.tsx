@@ -93,6 +93,7 @@ export default function MemeGenerator({
   const [isUnsplashPickerOpen, setIsUnsplashPickerOpen] = useState(false);
   const [isCropped, setIsCropped] = useState(false);
   const [isFeedbackLoading, setIsFeedbackLoading] = useState(false);
+  const [videoVerticalOffset, setVideoVerticalOffset] = useState<number>(50);
   const [isWatermarkEnabled, setIsWatermarkEnabled] = useState<boolean>(false);
   const [feedbackStatus, setFeedbackStatus] = useState<'used' | 'dont_use' | null>(null);
   const [watermarkSettings, setWatermarkSettings] = useState<WatermarkSettings>({
@@ -123,8 +124,9 @@ export default function MemeGenerator({
       isCropped,
       isWatermarkEnabled,
       watermarkSettings,
+      videoVerticalOffset: (isGreenscreenMode || isCropped) ? undefined : videoVerticalOffset,
     };
-  }, [selectedTemplate, caption, selectedBackground, isGreenscreenMode, textSettings, labels, labelSettings, isCropped, isWatermarkEnabled, watermarkSettings]);
+  }, [selectedTemplate, caption, selectedBackground, isGreenscreenMode, textSettings, labels, labelSettings, isCropped, isWatermarkEnabled, watermarkSettings, videoVerticalOffset]);
 
   useEffect(() => {
     async function loadBackgrounds() {
@@ -368,6 +370,24 @@ export default function MemeGenerator({
               <div className="w-full lg:w-1/2 space-y-4">
                 <h2 className="text-lg font-medium mb-2 text-white">Editor</h2>
               <TextOverlayForm caption={caption} onCaptionChange={setCaption} textSettings={textSettings} onTextSettingChange={updateTextSetting} isCropped={isCropped} />
+              { !isGreenscreenMode && !isCropped && (
+                <div className="space-y-2">
+                  <label htmlFor="videoVerticalOffset" className="block text-sm font-medium text-gray-300">
+                    Video Vertical Offset: {videoVerticalOffset}%
+                  </label>
+                  <input
+                    type="range"
+                    id="videoVerticalOffset"
+                    name="videoVerticalOffset"
+                    min="0"
+                    max="100"
+                    value={videoVerticalOffset}
+                    onChange={(e) => setVideoVerticalOffset(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    disabled={isGreenscreenMode || isCropped}
+                  />
+                </div>
+              )}
               <LabelControls labels={labels} labelSettings={labelSettings} dispatch={dispatchLabelsAction} />
               <WatermarkControls isWatermarkEnabled={isWatermarkEnabled} onToggleWatermark={setIsWatermarkEnabled} watermarkSettings={watermarkSettings} onWatermarkSettingChange={updateWatermarkSetting} />
               <ImageUpload selectedTemplate={selectedTemplate} isGreenscreenMode={isGreenscreenMode} previewVideoRef={previewVideoRef} selectedBackground={selectedBackground} onClearBackground={() => setSelectedBackground(null)} onOpenImagePicker={() => setIsUnsplashPickerOpen(true)} />

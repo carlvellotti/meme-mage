@@ -42,7 +42,8 @@ export async function createMemePreview(
   isCropped?: boolean,
   // <<< Add watermark parameters >>>
   isWatermarkEnabled?: boolean,
-  watermarkSettings?: WatermarkSettings
+  watermarkSettings?: WatermarkSettings,
+  videoVerticalOffset?: number
 ): Promise<HTMLCanvasElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
@@ -74,7 +75,7 @@ export async function createMemePreview(
       const videoAspect = video.videoWidth / video.videoHeight;
       const targetWidth = canvasWidth;
       const targetHeight = targetWidth / videoAspect;
-      const yOffset = (canvasHeight - targetHeight) / 2;
+      let yOffset = (canvasHeight - targetHeight) / 2;
 
       // If cropped mode is enabled (and not in greenscreen mode), adjust the canvas
       if (isCropped && !isGreenscreen) {
@@ -217,6 +218,13 @@ export async function createMemePreview(
           ctx.drawImage(tempCanvas, 0, yOffset, targetWidth, targetHeight);
         } else {
           // Regular video drawing
+          // Apply videoVerticalOffset if provided and not in greenscreen/cropped mode
+          if (videoVerticalOffset !== undefined && !isGreenscreen && !isCropped) {
+            const desiredCenterY = (canvasHeight * videoVerticalOffset) / 100;
+            const calculatedYOffset = desiredCenterY - (targetHeight / 2);
+            // Clamp to ensure video stays within canvas bounds
+            yOffset = Math.max(0, Math.min(calculatedYOffset, canvasHeight - targetHeight));
+          }
           ctx.drawImage(video, 0, yOffset, targetWidth, targetHeight);
         }
         
