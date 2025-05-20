@@ -83,8 +83,24 @@ IMPORTANT:
 
 If a tool called "generate_template_response" is available, use it to structure your response.`;
 
-export const getGeminiVideoAnalysisPrompt = (exampleCaption: string | null) => {
-  const basePrompt = `You are a meme template creator. Create a detailed description template of this meme based on the video provided. Your description should help match user concepts with appropriate meme templates.
+export const getGeminiVideoAnalysisPrompt = (
+  exampleCaption: string | null,
+  feedbackContext?: string | null
+) => {
+  let promptWithFeedback = '';
+  if (feedbackContext && feedbackContext.trim() !== '') {
+    promptWithFeedback = `
+A human supervisor has provided the following feedback on a previous analysis of this video, or is providing crucial context. You MUST incorporate this feedback and assume it is correct and a priority to address in your new analysis:
+--- HUMAN FEEDBACK ---
+${feedbackContext}
+--- END HUMAN FEEDBACK ---
+
+Please re-analyze the video based on this feedback AND the video content itself.
+Your primary goal is to refine or correct the previous understanding based on this new human-provided insight.
+`;
+  }
+
+  const basePrompt = `${promptWithFeedback}You are a meme template creator. Create a detailed description template of this meme based on the video provided. Your description should help match user concepts with appropriate meme templates.
 
 First, provide a concise, common name for this meme template on a single line like this:
 **Suggested Name:** [Meme Template Name]

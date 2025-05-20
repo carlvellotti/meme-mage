@@ -218,7 +218,7 @@ export async function POST(req: NextRequest) {
         analysis = 'Analysis failed.';
       }
 
-      // 3. Generate Embedding (only if analysis exists and is not "Analysis failed.")
+      // 3. Generate Embedding
       if (analysis && analysis !== 'Analysis failed.') {
         try {
           embeddingVector = await generateEmbedding(analysis);
@@ -233,19 +233,22 @@ export async function POST(req: NextRequest) {
 
       // 4. Insert into Database
       console.log(`[Node Processing ${currentProcessingUrl}] Inserting into database...`);
+      const insertPayload: any = {
+        name: suggestedName,
+        video_url: finalVideoUrl,
+        poster_url: posterUrl,
+        instructions: analysis,
+        original_source_url: currentProcessingUrl, 
+        embedding: embeddingVector,
+        reviewed: false,
+        uploader_name: 'Scraper',
+        scraped_example_caption: captionText || null, // Use captionText directly from pythonResult
+        // instagram_id: instagramId // Temporarily commented out
+      };
+
       const { data: dbData, error: dbError } = await supabaseAdmin
         .from('meme_templates')
-        .insert({
-          name: suggestedName,
-          video_url: finalVideoUrl,
-          poster_url: posterUrl,
-          instructions: analysis,
-          original_source_url: currentProcessingUrl, // Use the consistent input URL
-          embedding: embeddingVector,
-          reviewed: false,
-          uploader_name: 'Scraper',
-          // instagram_id: instagramId // Temporarily commented out
-        })
+        .insert(insertPayload)
         .select('id')
         .single();
 

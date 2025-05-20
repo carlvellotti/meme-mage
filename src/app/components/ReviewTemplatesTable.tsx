@@ -145,8 +145,9 @@ interface EditTemplateModalProps {
   initialName: string;          
   initialInstructions: string;
   uploaderName?: string | null; 
-  onSaveChanges: (templateId: string, newName: string, newInstructions: string) => Promise<MemeTemplate | null>; // Updated prop name and signature
-  onSaveAndApprove: (templateId: string, newName: string, newInstructions: string) => Promise<void>; // Added prop
+  onSaveChanges: (templateId: string, newName: string, newInstructions: string) => Promise<MemeTemplate | null>;
+  onSaveAndApprove: (templateId: string, newName: string, newInstructions: string) => Promise<void>;
+  onReanalysisSubmitted: () => void; // <-- New prop
 }
 
 const EditTemplateModal: React.FC<EditTemplateModalProps> = ({ 
@@ -156,32 +157,35 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
   initialName,             
   initialInstructions,
   uploaderName,             
-  onSaveChanges,       // Renamed prop
-  onSaveAndApprove   // Added prop
+  onSaveChanges,
+  onSaveAndApprove,
+  onReanalysisSubmitted // <-- New prop
 }) => {
   const [modalName, setModalName] = useState(initialName);              
   const [modalInstructions, setModalInstructions] = useState(initialInstructions);
-  const [isSaving, setIsSaving] = useState(false); // Generic saving state
-  const [isEditingInstructions, setIsEditingInstructions] = useState(false); // <-- Added state
+  const [feedbackText, setFeedbackText] = useState(''); // <-- New state for feedback
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmittingReanalysis, setIsSubmittingReanalysis] = useState(false); // <-- New state for reanalysis submission
+  const [isEditingInstructions, setIsEditingInstructions] = useState(false);
 
   useEffect(() => {
     setModalName(initialName);
     setModalInstructions(initialInstructions);
-  }, [initialName, initialInstructions]);
+    setFeedbackText(''); // Reset feedback text when template/props change
+  }, [initialName, initialInstructions, template]); // Added template to dependency array to ensure reset
 
 
   if (!isOpen || !template) return null;
 
-  const hasChanges = modalName !== initialName || modalInstructions !== initialInstructions;
+  const hasDirectChanges = modalName !== initialName || modalInstructions !== initialInstructions;
 
   const handleSaveChangesClick = async () => {
       setIsSaving(true);
       try {
           await onSaveChanges(template.id, modalName, modalInstructions);
-          onClose(); // Close modal on successful save
+          // Do not close modal here, allow user to make further changes or trigger re-analysis
       } catch (error) {
           console.error("Error saving changes:", error);
-          // Error toast handled in parent
       } finally {
           setIsSaving(false);
       }
@@ -191,14 +195,52 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
       setIsSaving(true);
       try {
           await onSaveAndApprove(template.id, modalName, modalInstructions);
-          onClose(); // Close modal on successful save & approve
+          onClose(); 
       } catch (error) {
           console.error("Error saving and approving:", error);
-           // Error toast handled in parent
       } finally {
           setIsSaving(false);
       }
   };
+
+  const handleSaveAndReanalyzeClick = async () => {
+    if (!template) return;
+    setIsSubmittingReanalysis(true);
+    const payload: any = {
+        triggerReanalysis: true,
+        feedbackContext: feedbackText,
+    };
+    if (modalName !== initialName) {
+        payload.name = modalName;
+    }
+    if (modalInstructions !== initialInstructions) {
+        // Send the current state of instructions for potential save before AI overwrites
+        payload.instructions = modalInstructions; 
+    }
+
+    try {
+        const response = await fetch(`/api/templates/${template.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        if (response.status === 202) {
+            toast.success('Re-analysis started. Template will update in the list soon.');
+            onReanalysisSubmitted(); // Notify parent to refresh
+            onClose(); // Close the modal
+        } else {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Failed to start re-analysis (Status: ${response.status})`);
+        }
+    } catch (err: any) {
+        console.error('Re-analysis submission failed:', err);
+        toast.error(`Re-analysis failed: ${err.message}`);
+    } finally {
+        setIsSubmittingReanalysis(false);
+    }
+  };
+
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
       if (e.target === e.currentTarget) {
@@ -247,14 +289,14 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
                   onBlur={() => setIsEditingInstructions(false)} // <-- Switch back on blur
                   className="w-full p-3 border border-blue-500 bg-gray-700 text-white rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm resize-y flex-grow" // Highlight border when editing
                   placeholder="Enter detailed instructions..."
-                  style={{minHeight: '800px', maxHeight: '60vh'}} // Restore taller height
+                  style={{minHeight: '300px', maxHeight: '40vh'}} // Adjusted height
                   autoFocus // Focus when switching to edit mode
               />
             ) : (
               <div
                   onClick={() => setIsEditingInstructions(true)} // <-- Switch to edit on click
                   className="w-full p-3 pb-6 border border-gray-600 bg-gray-700/60 text-white rounded-md text-sm flex-grow cursor-pointer hover:border-gray-500 overflow-y-auto prose prose-invert prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5"
-                  style={{minHeight: '800px', maxHeight: '60vh'}} // Restore taller height
+                  style={{minHeight: '300px', maxHeight: '40vh'}} // Adjusted height
               >
                   {modalInstructions ? (
                       <ReactMarkdown 
@@ -274,11 +316,27 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
             )}
         </div>
 
+        {/* NEW: Feedback for Re-analysis Textarea */}
+        <div className="mb-4 flex-shrink-0">
+            <label htmlFor="modal-feedback-text" className="block text-sm font-medium text-gray-300 mb-1">
+                Feedback for Re-analysis (AI will prioritize this; optional)
+            </label>
+            <textarea
+                id="modal-feedback-text"
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                className="w-full p-2 border border-gray-600 bg-gray-700 text-white rounded-md focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm resize-y"
+                placeholder="e.g., The main character is actually feeling sarcastic, not surprised. Focus on the cat in the background."
+                rows={3}
+                disabled={isSubmittingReanalysis || isSaving}
+            />
+        </div>
+
         {/* Modal Footer */}
         <div className="mt-auto flex justify-end space-x-3 flex-shrink-0 pt-4 border-t border-gray-700">
           <button
             onClick={onClose} 
-            disabled={isSaving}
+            disabled={isSaving || isSubmittingReanalysis}
             className="px-4 py-2 text-sm font-medium rounded-md text-gray-300 bg-gray-600 hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-gray-400 disabled:opacity-50"
           >
             Cancel
@@ -286,15 +344,23 @@ const EditTemplateModal: React.FC<EditTemplateModalProps> = ({
           {/* Save Changes Button */}
           <button
             onClick={handleSaveChangesClick}
-            disabled={isSaving || !hasChanges} // Disable if saving or no changes
+            disabled={isSaving || isSubmittingReanalysis || !hasDirectChanges}
             className="px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-wait"
           >
             {isSaving ? 'Saving...' : 'Save Changes'}
           </button>
+          {/* NEW: Save & Start Re-analysis Button */}
+          <button
+            onClick={handleSaveAndReanalyzeClick}
+            disabled={isSaving || isSubmittingReanalysis || !feedbackText.trim()} // Disable if no feedback or already processing
+            className="px-4 py-2 text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-wait"
+          >
+            {isSubmittingReanalysis ? 'Starting Re-analysis...' : 'Save & Start Re-analysis'}
+          </button>
            {/* Save & Approve Button */}
           <button
             onClick={handleSaveAndApproveClick}
-            disabled={isSaving} // Only disable if currently saving
+            disabled={isSaving || isSubmittingReanalysis} 
             className="px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 disabled:opacity-50 disabled:cursor-wait"
           >
             {isSaving ? 'Saving...' : 'Save & Approve'}
@@ -425,6 +491,13 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
   const handleRefreshClick = () => {
     fetchUnreviewedTemplates(1, false); // Fetch page 1 on manual refresh
     toast.success('Refreshed review list');
+  };
+
+  // --- NEW: Handler for when reanalysis is submitted from modal ---
+  const handleReanalysisSubmitted = () => {
+    console.log('Re-analysis submitted, triggering refresh of review list.');
+    fetchUnreviewedTemplates(1, false); // Re-fetch page 1
+    // Or, you could use setRefreshTrigger(prev => prev + 1) if you prefer that pattern
   };
 
   // Handle Load More click
@@ -880,6 +953,7 @@ const UnreviewedTemplatesTable: React.FC<UnreviewedTemplatesTableProps> = ({
           uploaderName={currentEditingTemplate?.uploader_name}
           onSaveChanges={handleSaveChangesOnly}
           onSaveAndApprove={handleSaveAndApprove}
+          onReanalysisSubmitted={handleReanalysisSubmitted}
       />
 
       {/* New Preview/Crop Modal */} 
