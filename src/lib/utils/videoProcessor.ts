@@ -116,7 +116,8 @@ export async function createMemeVideo(
   },
   isCropped?: boolean,
   isWatermarkEnabled?: boolean,
-  watermarkSettings?: WatermarkSettings
+  watermarkSettings?: WatermarkSettings,
+  videoVerticalOffset?: number
 ): Promise<Blob> {
   // Create a container to hold and control all media elements
   const container = document.createElement('div');
@@ -147,7 +148,7 @@ export async function createMemeVideo(
     const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
     const targetWidth = standardWidth;
     const targetHeight = targetWidth / videoAspect;
-    const yOffset = (standardHeight - targetHeight) / 2;
+    let yOffset = (standardHeight - targetHeight) / 2;
     
     // If crop mode is enabled and we're not in greenscreen mode
     if (isCropped && !isGreenscreen) {
@@ -236,6 +237,12 @@ export async function createMemeVideo(
           ctx.drawImage(videoElement, 0, videoTop, targetWidth, targetHeight);
         } else {
           // Standard video drawing
+          // Apply videoVerticalOffset if provided and conditions met
+          if (videoVerticalOffset !== undefined && !isGreenscreen && !isCropped) {
+            const desiredCenterY = (standardHeight * videoVerticalOffset) / 100;
+            const calculatedYOffset = desiredCenterY - (targetHeight / 2);
+            yOffset = Math.max(0, Math.min(calculatedYOffset, standardHeight - targetHeight));
+          }
           ctx.drawImage(videoElement, 0, yOffset, targetWidth, targetHeight);
         }
       }

@@ -30,6 +30,7 @@ interface VideoProcessingBaseParams {
   isCropped: boolean;
   isWatermarkEnabled: boolean;
   watermarkSettings: WatermarkSettings;
+  videoVerticalOffset?: number;
 }
 
 export interface GeneratePreviewParams extends VideoProcessingBaseParams {}
@@ -58,7 +59,8 @@ export const useVideoProcessing = () => {
         params.labelSettings,
         params.isCropped,
         params.isWatermarkEnabled,
-        params.watermarkSettings
+        params.watermarkSettings,
+        params.videoVerticalOffset
       );
       setCurrentPreview(canvas);
     } catch (error) {
@@ -86,7 +88,8 @@ export const useVideoProcessing = () => {
         params.labelSettings,
         params.isCropped,
         params.isWatermarkEnabled,
-        params.watermarkSettings
+        params.watermarkSettings,
+        params.videoVerticalOffset
       );
 
       const url = URL.createObjectURL(videoBlob);
