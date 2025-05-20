@@ -28,17 +28,22 @@ interface SingleProcessingResult {
 
 export async function POST(req: NextRequest) {
   let originalUrlInput: string = ''; // For logging in case of early exit
+  let isGreenscreenInput: boolean = false; // For logging
 
   try {
     const body = await req.json();
     const url: string = body.url; // Expect a single URL
+    const isGreenscreen: boolean = body.isGreenscreen || false;
+    const exampleCaptions: string[] | undefined = body.exampleCaptions;
+
     originalUrlInput = url;
+    isGreenscreenInput = isGreenscreen;
 
     if (!url || typeof url !== 'string' || url.trim() === '') {
       return NextResponse.json({ error: 'Missing or invalid URL string in request body' }, { status: 400 });
     }
 
-    console.log(`[API /api/scrape-reels] Received request to scrape URL: ${url}`);
+    console.log(`[API /api/scrape-reels] Received request to scrape URL: ${url}, Is Greenscreen: ${isGreenscreen}, Example Captions: ${exampleCaptions ? exampleCaptions.join(', ') : 'None'}`);
 
     const scriptDir = path.resolve(process.cwd(), 'src/lib/meme-scraper');
     const scriptPath = path.join(scriptDir, 'process_reels.py');
@@ -74,11 +79,16 @@ export async function POST(req: NextRequest) {
       } as SingleProcessingResult, { status: 500 });
     }
 
-    const runPythonScriptForSingleUrl = (targetUrl: string): Promise<PythonScrapeResult | null> => {
+    const runPythonScriptForSingleUrl = (targetUrl: string, forGreenscreen: boolean): Promise<PythonScrapeResult | null> => {
       return new Promise((resolve, reject) => {
-        console.log(`[API /api/scrape-reels] Spawning Python script for URL: ${targetUrl}`);
-        // Pass the single URL to the script
-        const pythonProcess = spawn(pythonExecutable, [scriptPath, targetUrl], {
+        console.log(`[API /api/scrape-reels] Spawning Python script for URL: ${targetUrl}, Greenscreen: ${forGreenscreen}`);
+        
+        const scriptArgs = [scriptPath, targetUrl];
+        if (forGreenscreen) {
+          scriptArgs.push('--is-greenscreen');
+        }
+
+        const pythonProcess = spawn(pythonExecutable, scriptArgs, {
           cwd: scriptDir,
           env: scriptEnv,
           stdio: ['ignore', 'pipe', 'pipe'],
@@ -152,7 +162,7 @@ export async function POST(req: NextRequest) {
       });
     };
 
-    const pythonResult = await runPythonScriptForSingleUrl(url);
+    const pythonResult = await runPythonScriptForSingleUrl(url, isGreenscreen);
 
     if (!pythonResult || !pythonResult.success || !pythonResult.finalVideoUrl) {
       const message = pythonResult?.error || 'Python script did not return successful data or finalVideoUrl for this URL.';
@@ -165,12 +175,24 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Start Node.js processing for successful Python scrape ---
-    const { finalVideoUrl, captionText, instagramId } = pythonResult;
+    const { finalVideoUrl, instagramId } = pythonResult; // captionText removed here, will be determined conditionally
     let posterUrl: string | null = null;
     let analysis: string | null = null;
     let suggestedName: string | null = `Untitled Template - ${instagramId || 'UnknownID'}`;
     let embeddingVector: number[] | null = null;
     let templateId: string | undefined = undefined;
+
+    // Determine the scraped caption based on greenscreen mode and provided examples
+    let finalScrapedCaption: string | null = null;
+    if (isGreenscreen && exampleCaptions && exampleCaptions.length > 0) {
+      finalScrapedCaption = exampleCaptions.join('\\n'); // Join multiple captions with newline
+      console.log(`[Node Processing ${url}] Using user-provided example captions for greenscreen: "${finalScrapedCaption}"`);
+    } else if (!isGreenscreen && pythonResult.captionText) {
+      finalScrapedCaption = pythonResult.captionText;
+      console.log(`[Node Processing ${url}] Using Python-scraped caption for non-greenscreen: "${finalScrapedCaption}"`);
+    } else {
+      console.log(`[Node Processing ${url}] No caption available or applicable for this video.`);
+    }
 
     // Keep originalUrl from the input 'url' for consistency in the result
     const currentProcessingUrl = url;
@@ -200,7 +222,11 @@ export async function POST(req: NextRequest) {
         const analyzeResponse = await fetch(new URL('/api/analyze-video-template', req.url).toString(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ videoUrl: finalVideoUrl, exampleCaption: captionText }),
+          body: JSON.stringify({ 
+            videoUrl: finalVideoUrl, 
+            exampleCaption: finalScrapedCaption, // Use the determined finalScrapedCaption
+            isGreenscreen: isGreenscreen // Pass the isGreenscreen flag
+          }),
         });
         if (analyzeResponse.ok) {
           const data = await analyzeResponse.json();
@@ -242,7 +268,8 @@ export async function POST(req: NextRequest) {
         embedding: embeddingVector,
         reviewed: false,
         uploader_name: 'Scraper',
-        scraped_example_caption: captionText || null, // Use captionText directly from pythonResult
+        scraped_example_caption: finalScrapedCaption, // Use the determined finalScrapedCaption
+        is_greenscreen: isGreenscreen, // Set the is_greenscreen flag
         // instagram_id: instagramId // Temporarily commented out
       };
 

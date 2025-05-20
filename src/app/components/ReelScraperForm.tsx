@@ -17,6 +17,8 @@ export interface ProcessedUrlResult {
   posterUrl?: string;
   analysis?: string;
   suggestedName?: string;
+  exampleCaptions?: string[]; // Added to reflect parsed input for greenscreen
+  isGreenscreen?: boolean; // Added to reflect mode
 }
 
 interface SingleApiResponse {
@@ -35,6 +37,7 @@ export function ReelScraperForm({ onProcessingComplete, onSingleUrlProcessed }: 
   const [overallLoading, setOverallLoading] = useState(false)
   const [processedUrls, setProcessedUrls] = useState<ProcessedUrlResult[]>([])
   const [currentTask, setCurrentTask] = useState<string | null>(null)
+  const [isGreenscreenMode, setIsGreenscreenMode] = useState(false); // New state for greenscreen mode
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,36 +45,56 @@ export function ReelScraperForm({ onProcessingComplete, onSingleUrlProcessed }: 
     setCurrentTask('Starting processing...')
     setProcessedUrls([]) // Clear previous results
 
-    const urlsToProcess = urlsText
+    const lines = urlsText
       .split('\n')
-      .map(url => url.trim())
-      .filter(url => url.length > 0);
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
 
-    if (urlsToProcess.length === 0) {
-      toast.error('Please enter at least one Instagram Reel URL')
+    if (lines.length === 0) {
+      toast.error('Please enter at least one URL')
       setOverallLoading(false)
       setCurrentTask(null)
       return
     }
 
+    const urlsToProcess: Array<{ url: string; exampleCaptions: string[] }> = lines.map(line => {
+      const parts = line.split(',');
+      const url = parts[0].trim();
+      const exampleCaptions = parts.slice(1).map(c => c.trim()).filter(c => c.length > 0);
+      return { url, exampleCaptions };
+    });
+
     const resultsAccumulator: ProcessedUrlResult[] = [];
     // Initialize pending states for all URLs
-    setProcessedUrls(urlsToProcess.map(url => ({ originalUrl: url, status: 'pending' })));
+    setProcessedUrls(urlsToProcess.map(item => ({
+      originalUrl: item.url, 
+      status: 'pending', 
+      exampleCaptions: item.exampleCaptions, 
+      isGreenscreen: isGreenscreenMode 
+    })));
 
     for (let i = 0; i < urlsToProcess.length; i++) {
-      const currentUrl = urlsToProcess[i];
+      const currentItem = urlsToProcess[i];
+      const currentUrl = currentItem.url;
+      const currentExampleCaptions = currentItem.exampleCaptions;
+
       setCurrentTask(`Processing URL ${i + 1} of ${urlsToProcess.length}: ${currentUrl}`);
       setProcessedUrls(prev => 
         prev.map(p => p.originalUrl === currentUrl ? { ...p, status: 'processing' } : p)
       );
 
       try {
+        const requestBody: any = { url: currentUrl, isGreenscreen: isGreenscreenMode };
+        if (isGreenscreenMode && currentExampleCaptions.length > 0) {
+          requestBody.exampleCaptions = currentExampleCaptions;
+        }
+
         const response = await fetch('/api/scrape-reels', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ url: currentUrl }), // Send single URL
+          body: JSON.stringify(requestBody),
         });
 
         const resultData: SingleApiResponse = await response.json();
@@ -88,6 +111,8 @@ export function ReelScraperForm({ onProcessingComplete, onSingleUrlProcessed }: 
             posterUrl: resultData.posterUrl,
             analysis: resultData.analysis,
             suggestedName: resultData.suggestedName,
+            isGreenscreen: isGreenscreenMode, // Carry over the mode
+            exampleCaptions: isGreenscreenMode ? currentExampleCaptions : undefined // Store if relevant
           };
         } else {
           const errorMsg = resultData.message || `Failed to process URL. Status: ${response.status}`;
@@ -96,6 +121,8 @@ export function ReelScraperForm({ onProcessingComplete, onSingleUrlProcessed }: 
             originalUrl: currentUrl,
             status: 'error',
             message: errorMsg,
+            isGreenscreen: isGreenscreenMode,
+            exampleCaptions: isGreenscreenMode ? currentExampleCaptions : undefined
           };
         }
         resultsAccumulator.push(processedResult);
@@ -114,6 +141,8 @@ export function ReelScraperForm({ onProcessingComplete, onSingleUrlProcessed }: 
           originalUrl: currentUrl,
           status: 'error',
           message: errorMessage,
+          isGreenscreen: isGreenscreenMode,
+          exampleCaptions: isGreenscreenMode ? currentExampleCaptions : undefined
         };
         resultsAccumulator.push(errorResult);
         if (onSingleUrlProcessed) {
@@ -130,28 +159,51 @@ export function ReelScraperForm({ onProcessingComplete, onSingleUrlProcessed }: 
     if (onProcessingComplete) {
       onProcessingComplete(resultsAccumulator);
     }
-    // Optionally clear textarea after all processing is done, or keep it.
-    // setUrlsText(''); 
   }
 
   return (
     <div className="space-y-6 bg-gray-800 p-6 rounded-lg border border-gray-700 mt-8">
-      <h2 className="text-xl font-bold text-white">Process Instagram Reels (Sequentially)</h2>
+      <h2 className="text-xl font-bold text-white">Process Instagram Reels & TikToks</h2>
       
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="flex items-center space-x-3 mb-4">
+          <input 
+            type="checkbox" 
+            id="greenscreen-mode-toggle"
+            checked={isGreenscreenMode}
+            onChange={(e) => setIsGreenscreenMode(e.target.checked)}
+            disabled={overallLoading}
+            className="h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-offset-gray-800"
+          />
+          <label htmlFor="greenscreen-mode-toggle" className="text-sm font-medium text-gray-200">
+            Process as Greenscreen (TikToks, etc.)
+          </label>
+        </div>
+
         <div>
           <label htmlFor="urls-input" className="block text-sm font-medium text-gray-300 mb-2">
-            Instagram Reel URLs (one per line)
+            Video URLs (one per line)
+            {isGreenscreenMode && <span className="text-xs text-gray-400"> - Optionally add comma-separated example captions after URL</span>}
           </label>
           <textarea
             id="urls-input"
             value={urlsText}
             onChange={(e) => setUrlsText(e.target.value)}
             className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500 min-h-[120px]"
-            placeholder="https://www.instagram.com/reel/example1/\nhttps://www.instagram.com/reel/example2/"
+            placeholder={
+              isGreenscreenMode 
+              ? "https://www.tiktok.com/@user/video/123,Example caption one,Another example\nhttps://www.tiktok.com/@user/video/456"
+              : "https://www.instagram.com/reel/example1/\nhttps://www.instagram.com/reel/example2/"
+            }
             disabled={overallLoading}
             required
           />
+           {isGreenscreenMode && (
+            <p className="mt-2 text-xs text-gray-400">
+              For greenscreen mode, you can provide example captions after the URL, separated by commas. E.g.:<br/>
+              `https://www.tiktok.com/@user/video/123,This is a caption,This is another one`
+            </p>
+          )}
         </div>
 
         <button
@@ -168,7 +220,7 @@ export function ReelScraperForm({ onProcessingComplete, onSingleUrlProcessed }: 
               <span>{currentTask || 'Processing...'}</span>
             </>
           ) : (
-            'Process All Reels Listed'
+            `Process All ${isGreenscreenMode ? 'Greenscreen Videos' : 'Reels'} Listed`
           )}
         </button>
       </form>
@@ -179,11 +231,16 @@ export function ReelScraperForm({ onProcessingComplete, onSingleUrlProcessed }: 
           <ul className="space-y-2 max-h-96 overflow-y-auto p-3 bg-gray-700/50 rounded-md border border-gray-600">
             {processedUrls.map((result, index) => (
               <li key={index} className={`p-3 rounded-md text-sm ${result.status === 'success' ? 'bg-green-700/30 border border-green-600' : result.status === 'error' ? 'bg-red-700/30 border border-red-600' : result.status === 'processing' ? 'bg-yellow-700/30 border border-yellow-600 animate-pulse' : 'bg-gray-600/30 border border-gray-500'}`}>
-                <div className="font-medium truncate text-white">{result.originalUrl}</div>
+                <div className="font-medium truncate text-white">{result.originalUrl} {result.isGreenscreen && <span className="text-xs px-1.5 py-0.5 bg-purple-600 rounded-sm">GS</span>}</div>
                 <div className={`capitalize font-semibold ${result.status === 'success' ? 'text-green-300' : result.status === 'error' ? 'text-red-300' : result.status === 'processing' ? 'text-yellow-300' : 'text-gray-300'}`}>
                   Status: {result.status}
                 </div>
                 {result.message && <div className="text-xs text-gray-400 mt-1">Message: {result.message}</div>}
+                {result.isGreenscreen && result.exampleCaptions && result.exampleCaptions.length > 0 && (
+                  <div className="text-xs text-purple-300 mt-1">
+                    Provided Captions: {result.exampleCaptions.join('; ')}
+                  </div>
+                )}
                 {result.status === 'success' && result.templateId && (
                   <div className="text-xs text-green-400 mt-1">Template ID: {result.templateId}</div>
                 )}

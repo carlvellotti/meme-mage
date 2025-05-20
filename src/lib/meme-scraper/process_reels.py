@@ -114,7 +114,7 @@ def cleanup_files(*file_paths):
         else:
             logger.info(f"Directory not found, skipping cleanup: {dir_path}")
 
-def process_url(url, uploader):
+def process_url(url, uploader, is_greenscreen=False):
     """Process a single Instagram URL, upload video, and print results as JSON."""
     video_path = None
     frame_path = None
@@ -124,14 +124,16 @@ def process_url(url, uploader):
 
     try:
         # Extract Instagram ID for unique naming
-        instagram_id = extract_instagram_id(url)
+        # For TikTok or other URLs in greenscreen mode, this might need adjustment or a different ID strategy
+        # For now, it will try to extract or generate UUID
+        instagram_id = extract_instagram_id(url) 
         if not instagram_id:
-            logger.error(f"Could not extract Instagram ID from URL: {url}")
-            error_response_base.update({"error": "Could not extract Instagram ID"})
+            logger.error(f"Could not extract a usable ID from URL: {url}")
+            error_response_base.update({"error": "Could not extract usable ID"})
             print(json.dumps(error_response_base))
             return False
 
-        logger.info(f"Processing URL: {url} with Instagram ID: {instagram_id}")
+        logger.info(f"Processing URL: {url} with ID: {instagram_id}, Greenscreen Mode: {is_greenscreen}")
 
         # 1. Download the video
         video_path = download_video(url)
@@ -141,29 +143,39 @@ def process_url(url, uploader):
             print(json.dumps(error_response_base))
             return False
 
-        # 2. Extract a frame
-        frame_path = extract_frame(video_path)
-        if not frame_path:
-            logger.error(f"Failed to extract frame for {url}")
-            error_response_base.update({"error": "Failed to extract frame"})
-            print(json.dumps(error_response_base))
-            return False
+        video_to_upload = video_path # Default to original downloaded video
+        caption_text = None # Default caption to None
 
-        # 3. Crop the video
-        cropped_video_path = crop_video(video_path, frame_path)
-        if not cropped_video_path:
-            logger.error(f"Failed to crop video for {url}")
-            error_response_base.update({"error": "Failed to crop video"})
-            print(json.dumps(error_response_base))
-            return False
+        if not is_greenscreen:
+            logger.info(f"Non-greenscreen mode for {url}. Proceeding with frame extraction, cropping, and caption extraction.")
+            # 2. Extract a frame (only if not greenscreen)
+            frame_path = extract_frame(video_path)
+            if not frame_path:
+                logger.error(f"Failed to extract frame for {url}")
+                error_response_base.update({"error": "Failed to extract frame"})
+                print(json.dumps(error_response_base))
+                return False
 
-        # 4. Extract caption
-        caption_text = extract_caption(frame_path)
-        logger.info(f"Extracted caption (or placeholder) for {url}: {caption_text[:100] if caption_text else 'None'}...")
+            # 3. Crop the video (only if not greenscreen)
+            cropped_video_path = crop_video(video_path, frame_path)
+            if not cropped_video_path:
+                logger.error(f"Failed to crop video for {url}")
+                error_response_base.update({"error": "Failed to crop video"})
+                print(json.dumps(error_response_base))
+                return False
+            video_to_upload = cropped_video_path # For non-greenscreen, upload the cropped version
 
-        # 5. Upload Cropped Video to Supabase Storage
-        logger.info(f"Attempting to upload video from: {cropped_video_path} for {url}")
-        video_success, video_storage_url_or_error = uploader.upload_video(cropped_video_path, instagram_id)
+            # 4. Extract caption (only if not greenscreen)
+            caption_text = extract_caption(frame_path)
+            logger.info(f"Extracted caption (or placeholder) for {url}: {caption_text[:100] if caption_text else 'None'}...")
+        else:
+            logger.info(f"Greenscreen mode for {url}. Skipping frame extraction, cropping, and caption extraction.")
+            # caption_text remains None as initialized
+            # video_to_upload remains video_path (original download) as initialized
+
+        # 5. Upload Video to Supabase Storage
+        logger.info(f"Attempting to upload video from: {video_to_upload} for {url}")
+        video_success, video_storage_url_or_error = uploader.upload_video(video_to_upload, instagram_id)
         if not video_success:
             logger.error(f"Failed to upload video for {url}: {video_storage_url_or_error}")
             error_response_base.update({"error": f"Failed to upload video: {video_storage_url_or_error}"})
@@ -174,9 +186,9 @@ def process_url(url, uploader):
         # 6. Print results as JSON to stdout
         result = {
             "success": True,
-            "finalVideoUrl": video_storage_url_or_error, # uploader returns the URL on success
-            "captionText": caption_text,
-            "instagramId": instagram_id,
+            "finalVideoUrl": video_storage_url_or_error,
+            "captionText": caption_text, # Will be None for greenscreen mode
+            "instagramId": instagram_id, # Or a more generic ID for TikTok etc.
             "originalUrl": url
         }
         print(json.dumps(result))
@@ -196,20 +208,21 @@ def process_url(url, uploader):
 def main():
     """Main entry point: Expects a single URL, initializes uploader, processes it."""
     
-    # When called by Node.js, sys.argv will be [script_name, url]
-    if len(sys.argv) != 2:
-        logger.error("Usage: python process_reels.py <single_url>")
-        # Output JSON error message for Node.js to capture
-        print(json.dumps({"success": False, "error": "Python script usage error: Expected a single URL argument.", "originalUrl": "unknown_due_to_arg_count_error"}))
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Process a single video URL (e.g., Instagram Reel, TikTok).")
+    parser.add_argument("url", help="The URL of the video to process.")
+    parser.add_argument("--is-greenscreen", action="store_true", help="Flag to indicate greenscreen mode (skips cropping and caption extraction).")
+    
+    args = parser.parse_args()
 
-    target_url = sys.argv[1].strip()
+    target_url = args.url.strip()
+    is_greenscreen_mode = args.is_greenscreen
+
     if not target_url:
         logger.error("Received an empty URL.")
         print(json.dumps({"success": False, "error": "Python script error: Received an empty URL.", "originalUrl": target_url}))
         sys.exit(1)
         
-    logger.info(f"Python script starting processing for single URL: {target_url}")
+    logger.info(f"Python script starting processing for single URL: {target_url}, Greenscreen: {is_greenscreen_mode}")
 
     # Initialize StorageUploader once
     try:
@@ -226,7 +239,7 @@ def main():
 
     # Process the single URL
     # The process_url function already prints the JSON output and returns True/False
-    if process_url(target_url, uploader):
+    if process_url(target_url, uploader, is_greenscreen_mode):
         logger.info(f"Successfully processed URL: {target_url}")
         sys.exit(0) # Success
     else:

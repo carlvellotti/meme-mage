@@ -9,19 +9,44 @@ This document outlines the key features and technical details of the Meme Mage f
 **Core Components & Flow:**
 
 1.  **Database Schema (`meme_templates` table):**
-    *   A new nullable column `category` of type `TEXT` was added to the `public.meme_templates` table.
-    *   This was achieved by running the following SQL command in Supabase:
+    *   The `meme_templates` table stores all information about individual meme templates. Key fields include:
+        *   `id UUID PRIMARY KEY`
+        *   `name TEXT`
+        *   `video_url TEXT` (URL to the processed video file)
+        *   `poster_url TEXT NULLABLE` (URL to a thumbnail/poster image)
+        *   `instructions TEXT NULLABLE` (AI-generated analysis/description of the template)
+        *   `original_source_url TEXT NULLABLE` (The original URL the video was scraped from)
+        *   `embedding VECTOR(1536) NULLABLE` (Vector embedding of the `instructions` for semantic search. Adjust dimension as per your model.)
+        *   `is_greenscreen BOOLEAN DEFAULT FALSE` (True if the template is a greenscreen video, affecting processing and analysis)
+        *   `category TEXT NULLABLE` (User-defined category for filtering, e.g., "Gym")
+        *   `scraped_example_caption TEXT NULLABLE` (Captions provided by user during greenscreen scraping, or captions extracted by AI for standard videos)
+        *   `reviewed BOOLEAN DEFAULT FALSE`
+        *   `uploader_name TEXT NULLABLE` (e.g., 'Scraper', 'Admin')
+        *   (Other standard timestamp fields like `created_at`, `updated_at`)
+    *   For the category feature, the `category` column was added via:
         ```sql
         ALTER TABLE public.meme_templates
         ADD COLUMN IF NOT EXISTS category TEXT NULL;
         ```
+    *   The `is_greenscreen` column is crucial for the video scraper and template selection logic.
 
 2.  **TypeScript Type Definition (`src/lib/supabase/types.ts`):**
-    *   The `MemeTemplate` interface was updated to include the new optional field:
+    *   The `MemeTemplate` interface reflects the database schema:
         ```typescript
         export interface MemeTemplate {
-          // ... other fields ...
+          id: string;
+          name: string | null;
+          video_url: string | null;
+          poster_url?: string | null;
+          instructions?: string | null;
+          original_source_url?: string | null;
+          embedding?: number[] | null; // Or string if your library handles it as such before conversion
+          is_greenscreen?: boolean | null;
           category?: string | null;
+          scraped_example_caption?: string | null;
+          reviewed?: boolean | null;
+          uploader_name?: string | null;
+          // ... other fields
         }
         ```
 
@@ -57,7 +82,7 @@ This document outlines the key features and technical details of the Meme Mage f
         *   The `category` value is extracted from the validated request body.
         *   This `category` value is then passed as a parameter (e.g., `filter_category` or `filter_category_param`) to the appropriate Supabase RPC function (`match_meme_templates` or `get_random_meme_templates`).
 
-6.  **Supabase RPC Function Updates (`match_meme_templates` & `get_random_meme_templates`):**
+6.  **Supabase RPC Function Updates:**
     *   **New Parameter:** Both functions were updated to accept a new optional parameter: `filter_category TEXT DEFAULT NULL`.
     *   **SQL Logic:** The `WHERE` clause in both functions was modified to include:
         ```sql
@@ -159,63 +184,126 @@ Several issues were encountered and resolved during the implementation of the ca
         ```
         This left only the intended version of the function, resolving the ambiguity.
 
-## Feature: Video Reel Scraper & Initial Analysis
+## Feature: Video Reel Scraper & Initial Analysis (with Greenscreen Support)
 
-**Goal:** To automate the process of fetching video reels from URLs, extracting key information (video, caption), performing an initial AI analysis, and storing them as new meme templates.
+**Goal:** To automate the process of fetching videos (Instagram Reels, TikToks, etc.) from URLs, extracting key information, performing an initial AI analysis, and storing them as new meme templates. This includes support for "greenscreen" style videos where caption extraction and video cropping are skipped, and example captions can be user-provided.
 
 **Core Components & Flow:**
 
-1.  **API Endpoint (`POST /api/scrape-reels/route.ts`):**
-    *   Accepts a single `url` in the JSON request body.
+1.  **Frontend UI (`src/app/components/ReelScraperForm.tsx`):**
+    *   Allows users to input a list of video URLs, one per line, into a textarea.
+    *   Features a checkbox toggle for "Process as Greenscreen (TikToks, etc.)".
+    *   **Input Format:**
+        *   **Standard Mode (Greenscreen toggle OFF):** Each line contains just the video URL.
+            ```
+            https://www.instagram.com/reel/example1/
+            https://www.anotherplatform.com/video/example2
+            ```
+        *   **Greenscreen Mode (Greenscreen toggle ON):** Each line contains the video URL, optionally followed by comma-separated example captions.
+            ```
+            https://www.tiktok.com/@user/video/123,Optional caption one,Another example
+            https://www.youtube.com/shorts/greenscreen_example_without_captions
+            ```
+    *   **Processing Logic:**
+        *   When the form is submitted, the component iterates through each line from the textarea.
+        *   It parses the URL and any example captions (if in greenscreen mode and captions are provided).
+        *   For each URL, it makes an individual `POST` request to the `/api/scrape-reels` backend endpoint.
+
+2.  **API Endpoint (`POST /api/scrape-reels/route.ts`):**
+    *   Located at `src/app/api/scrape-reels/route.ts`.
+    *   Accepts a JSON request body for a single URL with the following structure:
+        ```typescript
+        interface ScrapeReelRequestBody {
+          url: string;                   // The video URL to process
+          isGreenscreen: boolean;        // True if greenscreen mode is active for this URL
+          exampleCaptions?: string[];    // Optional: User-provided captions (if isGreenscreen is true)
+        }
+        ```
     *   **Python Script Invocation:**
-        *   Spawns a Python script (`src/lib/meme-scraper/process_reels.py`) using `child_process.spawn`.
-        *   Passes necessary environment variables (Supabase credentials, Google Cloud credentials) to the Python script.
-        *   The Python script is responsible for:
-            *   Downloading the video from the provided URL.
-            *   Using Google Vision API (or similar) to extract text/caption from the video frames if applicable.
-            *   Returning a JSON object containing `success` (boolean), `finalVideoUrl` (e.g., a GCS link where the video is stored by Python), `captionText` (extracted text), and `instagramId` (if applicable).
-    *   **Result Handling from Python:**
-        *   Parses the JSON output from the Python script's stdout.
-        *   If the Python script fails or doesn't return a successful result, the API returns an error.
-    *   **Node.js Processing (Post-Python Success):**
-        1.  **Generate Thumbnail:** Calls an internal `/api/generate-thumbnail` endpoint (not detailed here) to create a poster image for the video.
-        2.  **Initial AI Analysis:**
-            *   Calls an internal `/api/analyze-video-template` endpoint.
-            *   Sends the `finalVideoUrl` (from Python) and `exampleCaption` (the `captionText` from Python) to this analysis endpoint.
-            *   The `/api/analyze-video-template` route (detailed separately) uses an LLM (e.g., Gemini via `getGeminiVideoAnalysisPrompt`) to generate:
-                *   `suggestedName` for the template.
-                *   `analysis` (the detailed instructions for the template).
-        3.  **Generate Embedding:** Uses `generateEmbedding` utility to create a vector embedding from the AI-generated `analysis` text.
-        4.  **Database Insertion:**
-            *   Constructs a payload for the `meme_templates` table including:
-                *   `name`: The `suggestedName` from AI.
-                *   `video_url`: The `finalVideoUrl` from Python.
+        *   Spawns the Python script `src/lib/meme-scraper/process_reels.py` using `child_process.spawn`.
+        *   Passes the `url` as a command-line argument to the script.
+        *   If `isGreenscreen` from the request body is `true`, it passes an additional `--is-greenscreen` flag to the Python script.
+        *   Necessary environment variables (Supabase credentials, Google Cloud credentials if used by Python) are passed to the script's environment.
+    *   **Python Script Responsibilities (`src/lib/meme-scraper/process_reels.py`):**
+        *   The Python script is responsible for the heavy lifting of video download and initial processing.
+        *   It uses `argparse` to accept the `url` and the optional `--is-greenscreen` flag.
+        *   **Video Downloading:** Uses a library like `yt-dlp` (via `downloader.py`) to download the video from the `url`.
+        *   **Conditional Processing based on `--is-greenscreen`:**
+            *   **If `--is-greenscreen` is present:**
+                *   Video cropping (e.g., via `video_cropper.py`) is **skipped**.
+                *   Caption/text extraction from video frames (e.g., via `caption_extractor.py` using Google Vision API) is **skipped**.
+                *   The originally downloaded video file is designated for upload.
+                *   The `captionText` returned in its JSON output will be `null`.
+            *   **If `--is-greenscreen` is NOT present (standard mode):**
+                *   A frame is extracted from the video (e.g., via `frame_extractor.py`).
+                *   The video is cropped based on this frame.
+                *   Captions/text are extracted from the frame using an OCR tool (like Google Vision API).
+                *   The cropped video file is designated for upload.
+                *   The extracted `captionText` is included in its JSON output.
+        *   **Video Upload:** The processed video (original for greenscreen, cropped for standard) is uploaded to a persistent storage (e.g., Supabase Storage) using a helper like `storage_uploader.py`. This helper returns the public URL of the stored video.
+        *   **Output:** The Python script prints a JSON object to its standard output, including:
+            *   `success: boolean`
+            *   `finalVideoUrl: string` (URL of the video in storage)
+            *   `captionText: string | null` (extracted caption or null)
+            *   `instagramId: string` (an extracted ID from the URL or a generated UUID)
+            *   `originalUrl: string` (the input URL, echoed back)
+            *   `error?: string` (if any error occurred)
+    *   **Result Handling from Python (in Node.js `/api/scrape-reels` route):**
+        *   The Node.js route captures and parses the JSON output from the Python script.
+        *   If the Python script indicates failure or essential data like `finalVideoUrl` is missing, the API returns an error response.
+    *   **Node.js Post-Python Processing & Database Interaction:**
+        1.  **Determine `finalScrapedCaption`:**
+            *   If `isGreenscreen` was true in the request and `exampleCaptions` were provided, these are joined (e.g., with a newline character: `\\n`) to form the `finalScrapedCaption`.
+            *   If `isGreenscreen` was false, the `captionText` received from the Python script is used as `finalScrapedCaption`.
+            *   If neither of the above, `finalScrapedCaption` remains `null`.
+        2.  **Generate Thumbnail:** Makes an internal `POST` request to `/api/generate-thumbnail` (not detailed here) with the `finalVideoUrl` to create and store a poster/thumbnail image. The URL of this thumbnail is retrieved.
+        3.  **Initial AI Analysis:**
+            *   Makes an internal `POST` request to `/api/analyze-video-template`.
+            *   The request body to this analysis endpoint includes:
+                *   `videoUrl`: The `finalVideoUrl`.
+                *   `exampleCaption`: The `finalScrapedCaption` determined above.
+                *   `isGreenscreen`: The boolean flag indicating the mode.
+            *   The `/api/analyze-video-template` route (see details in its own section) uses an LLM (e.g., Gemini via `getGeminiVideoAnalysisPrompt`) to generate a `suggestedName` and `analysis` (detailed instructions) for the new meme template. The prompt for `isGreenscreen` videos is specifically tuned to instruct the AI to ignore the greenscreen background in its description.
+        4.  **Generate Embedding:** The AI-generated `analysis` text is used to create a vector embedding via the `generateEmbedding` utility function (e.g., using OpenAI's embedding models).
+        5.  **Database Insertion:**
+            *   A new record is inserted into the `public.meme_templates` table using `supabaseAdmin`.
+            *   The payload includes:
+                *   `name`: The `suggestedName` from the AI analysis.
+                *   `video_url`: The `finalVideoUrl`.
                 *   `poster_url`: The URL of the generated thumbnail.
-                *   `instructions`: The `analysis` text from AI.
-                *   `original_source_url`: The initial URL provided to the scraper.
+                *   `instructions`: The `analysis` text from the AI.
+                *   `original_source_url`: The initial URL provided by the user.
                 *   `embedding`: The generated vector embedding.
-                *   `reviewed`: `false` (newly scraped templates require review).
-                *   `uploader_name`: 'Scraper'.
-                *   `scraped_example_caption`: The `captionText` directly from the Python script. This is the caption identified during the scraping process.
-            *   Inserts this payload into the `meme_templates` table using `supabaseAdmin`.
-    *   **Response:** Returns a JSON object summarizing the outcome, including the new `templateId` if successful.
+                *   `is_greenscreen`: The boolean `isGreenscreen` flag from the original request.
+                *   `reviewed`: `false` (newly scraped templates always start as unreviewed).
+                *   `uploader_name`: Set to 'Scraper'.
+                *   `scraped_example_caption`: The `finalScrapedCaption` (either user-provided for greenscreen or AI-extracted for standard).
+    *   **API Response:** The `/api/scrape-reels` route returns a JSON object to the frontend, summarizing the outcome for the processed URL (success or error, message, and new `templateId` if successful).
 
-2.  **Python Script (`src/lib/meme-scraper/process_reels.py` - High-Level):**
-    *   Takes a video URL as a command-line argument.
-    *   Uses appropriate libraries (e.g., `yt-dlp` or custom download logic) to download the video content.
-    *   (Potentially) Uploads the video to a persistent storage like Google Cloud Storage, obtaining a `finalVideoUrl`.
-    *   Utilizes Google Cloud Vision API's video intelligence capabilities to perform OCR or analyze video content to extract relevant `captionText`.
-    *   Prints a JSON string to stdout with the results (`success`, `finalVideoUrl`, `captionText`, `instagramId`, `error`).
+3.  **AI Video Analysis Endpoint (`POST /api/analyze-video-template/route.ts`):**
+    *   Located at `src/app/api/analyze-video-template/route.ts`.
+    *   Accepts a JSON request body:
+        ```typescript
+        interface AnalyzeVideoRequestBody {
+          videoUrl: string;
+          exampleCaption?: string | null;
+          feedbackContext?: string | null; // For re-analysis feature
+          isGreenscreen?: boolean;         // Indicates if the video is a greenscreen template
+        }
+        ```
+    *   Constructs a detailed prompt for an LLM (e.g., Gemini Pro) using the `getGeminiVideoAnalysisPrompt` utility from `src/lib/utils/prompts.ts`.
+        *   If `isGreenscreen` is true, `getGeminiVideoAnalysisPrompt` modifies the prompt to instruct the AI:
+            *   To focus its analysis (especially the "VISUAL DESCRIPTION") on foreground subjects and actions.
+            *   To explicitly NOT describe or mention the greenscreen background itself, assuming it will be replaced.
+    *   The API fetches the video content from `videoUrl`, converts it to base64, and sends it along with the prompt to the LLM.
+    *   Parses the LLM's response to extract a `suggestedName` and the main `analysis` text.
+    *   Returns these (`suggestedName`, `analysis`) in a JSON response.
 
-3.  **AI Video Analysis Endpoint (`POST /api/analyze-video-template/route.ts` - High-Level):**
-    *   Receives `videoUrl`, `exampleCaption` (optional), and `feedbackContext` (optional).
-    *   Constructs a prompt using `getGeminiVideoAnalysisPrompt`.
-    *   Calls an LLM (e.g., Gemini through Vertex AI or similar) with the video content (if the model supports direct video input) or metadata.
-    *   The LLM generates a `suggestedName` and detailed `analysis` (instructions) for the meme template based on the video and provided captions/feedback.
-    *   Returns the `suggestedName` and `analysis`.
-
-4.  **Database Schema (`meme_templates` table):**
-    *   `scraped_example_caption TEXT NULL`: Stores the example caption text extracted directly by the scraper/Vision API during the initial processing. This is preserved as the "original" example.
+4.  **Prompt Engineering (`getGeminiVideoAnalysisPrompt` in `src/lib/utils/prompts.ts`):**
+    *   This function dynamically constructs the prompt for the video analysis AI.
+    *   It takes parameters including `exampleCaption`, `feedbackContext` (for re-analysis), and `isGreenscreen`.
+    *   If `isGreenscreen` is true, it injects specific instructions into the prompt regarding how the AI should treat greenscreen backgrounds (i.e., ignore them and focus on foreground action).
+    *   The prompt guides the AI to generate a structured analysis including a suggested name, visual description, emotional context, usage patterns, and an analysis of any provided example caption, plus generation of new examples.
 
 ## Feature: Template Re-analysis with Feedback
 
@@ -269,7 +357,7 @@ Several issues were encountered and resolved during the implementation of the ca
     *   Accepts `videoUrl`, `exampleCaption` (optional), and `feedbackContext` (optional) in its request body.
     *   Uses `getGeminiVideoAnalysisPrompt` to construct the prompt for the LLM.
         *   The prompt is designed to instruct the LLM to prioritize the `feedbackContext`.
-        *   It also specifically asks the LLM to analyze the provided `exampleCaption` (which, in the re-analysis flow, is the `scraped_example_caption`) in light of the (newly refined) understanding of the template.
+        *   It also specifically asks the LLM to analyze the provided `exampleCaption` (which, in the re-analysis flow, is the `scraped_example_caption`) in light of the (refined) understanding of the template.
         *   It also asks the LLM to generate additional new examples.
     *   Calls the LLM (e.g., Gemini) with the video and the constructed prompt.
     *   Returns the LLM's `suggestedName` and `analysis` (which includes the re-evaluation of the original example and new examples).

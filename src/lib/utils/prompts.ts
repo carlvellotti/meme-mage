@@ -83,10 +83,17 @@ IMPORTANT:
 
 If a tool called "generate_template_response" is available, use it to structure your response.`;
 
-export const getGeminiVideoAnalysisPrompt = (
-  exampleCaption: string | null,
-  feedbackContext?: string | null
-) => {
+interface GeminiVideoAnalysisPromptParams {
+  exampleCaption: string | null;
+  feedbackContext?: string | null;
+  isGreenscreen?: boolean;
+}
+
+export const getGeminiVideoAnalysisPrompt = ({
+  exampleCaption,
+  feedbackContext,
+  isGreenscreen = false,
+}: GeminiVideoAnalysisPromptParams): string => {
   let promptWithFeedback = '';
   if (feedbackContext && feedbackContext.trim() !== '') {
     promptWithFeedback = `
@@ -100,7 +107,15 @@ Your primary goal is to refine or correct the previous understanding based on th
 `;
   }
 
-  const basePrompt = `${promptWithFeedback}You are a meme template creator. Create a detailed description template of this meme based on the video provided. Your description should help match user concepts with appropriate meme templates.
+  let greenscreenSpecificInstructions = '';
+  if (isGreenscreen) {
+    greenscreenSpecificInstructions = `
+
+**Important Note for Greenscreen Videos:** This video likely features a prominent greenscreen background. Your analysis should focus entirely on the foreground subjects, their actions, expressions, and any objects they interact with. Do NOT describe, mention, or allude to the greenscreen itself in your "VISUAL DESCRIPTION" or any other part of your analysis. Assume the greenscreen is irrelevant and will be replaced by other imagery later. The goal is to describe the template as it would be used, with the greenscreen keyed out.
+`;
+  }
+
+  const basePrompt = `${promptWithFeedback}You are a meme template creator. Create a detailed description template of this meme based on the video provided. Your description should help match user concepts with appropriate meme templates.${greenscreenSpecificInstructions}
 
 First, provide a concise, common name for this meme template on a single line like this:
 **Suggested Name:** [Meme Template Name]

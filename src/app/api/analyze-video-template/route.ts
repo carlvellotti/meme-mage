@@ -18,6 +18,7 @@ interface RequestBody {
   videoUrl: string;
   exampleCaption?: string | null;
   feedbackContext?: string | null;
+  isGreenscreen?: boolean;
   // Removed modelPreference
 }
 
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
   let videoUrl: string | undefined;
   let exampleCaption: string | null = null;
   let feedbackContext: string | null = null;
+  let isGreenscreen: boolean = false;
   // Removed modelPreference variable
 
   try {
@@ -39,8 +41,9 @@ export async function POST(req: NextRequest) {
     videoUrl = body.videoUrl;
     exampleCaption = body.exampleCaption || null;
     feedbackContext = body.feedbackContext || null;
+    isGreenscreen = body.isGreenscreen || false;
     // Removed modelPreference parsing
-    console.log(`[API /analyze-video-template] Parsed body: videoUrl=${videoUrl}, exampleCaption=${exampleCaption}, feedbackContext=${feedbackContext}`);
+    console.log(`[API /analyze-video-template] Parsed body: videoUrl=${videoUrl}, exampleCaption=${exampleCaption}, feedbackContext=${feedbackContext}, isGreenscreen=${isGreenscreen}`);
 
     if (!videoUrl) {
       console.error('[API /analyze-video-template] Error: Missing videoUrl in request body');
@@ -103,7 +106,11 @@ export async function POST(req: NextRequest) {
         }
     });
 
-    const promptText = getGeminiVideoAnalysisPrompt(exampleCaption, feedbackContext);
+    const promptText = getGeminiVideoAnalysisPrompt({
+        exampleCaption, 
+        feedbackContext, 
+        isGreenscreen 
+    });
 
     // Fixed type definition for parts to resolve linter warning
     const parts: ({ text: string } | { inlineData: { mimeType: string; data: string; } })[] = [
