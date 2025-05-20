@@ -209,7 +209,7 @@ export const getCaptionGenerationTestPrompt = (
   const finalRules = rulesText?.trim() ? rulesText.trim() : defaultRules;
 
   // Construct the final prompt using the determined rules and audience details
-  return `You are an expert meme caption generator. You will receive:
+  return `You will receive:
 1. A user's concept/joke idea
 2. Target audience: ${audienceName}${audienceDescription ? ` (Description: ${audienceDescription})` : ''} 
 3. A description of ONE specific meme template
