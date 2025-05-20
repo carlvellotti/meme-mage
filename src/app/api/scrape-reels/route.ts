@@ -10,72 +10,75 @@ interface PythonScrapeResult {
   finalVideoUrl?: string;
   captionText?: string;
   instagramId?: string;
-  originalUrl: string;
+  originalUrl: string; // Python script should echo back the original URL it processed
   error?: string;
 }
 
-// Define structure for processing results
-interface ProcessingResult {
+// Define structure for the API response for a single URL
+interface SingleProcessingResult {
   originalUrl: string;
-  status: 'success' | 'python_error' | 'processing_error' | 'db_error';
+  status: 'success' | 'python_error' | 'processing_error' | 'db_error' | 'script_setup_error';
   message: string;
   templateId?: string; // If successfully inserted
+  finalVideoUrl?: string;
+  posterUrl?: string;
+  analysis?: string;
+  suggestedName?: string;
 }
 
 export async function POST(req: NextRequest) {
+  let originalUrlInput: string = ''; // For logging in case of early exit
+
   try {
     const body = await req.json();
-    const urls: string[] = body.urls;
+    const url: string = body.url; // Expect a single URL
+    originalUrlInput = url;
 
-    if (!urls || !Array.isArray(urls) || urls.length === 0) {
-      return NextResponse.json({ error: 'Missing or invalid URLs array in request body' }, { status: 400 });
+    if (!url || typeof url !== 'string' || url.trim() === '') {
+      return NextResponse.json({ error: 'Missing or invalid URL string in request body' }, { status: 400 });
     }
 
-    // --- Security TODO: Implement authentication/authorization check here ---
-    // In a real application, verify the user has permission to perform this action.
-    console.log(`[API /api/scrape-reels] Received request to scrape ${urls.length} URLs:`, urls);
+    console.log(`[API /api/scrape-reels] Received request to scrape URL: ${url}`);
 
-    // Define path to the Python script
     const scriptDir = path.resolve(process.cwd(), 'src/lib/meme-scraper');
     const scriptPath = path.join(scriptDir, 'process_reels.py');
-    const pythonExecutable = process.env.PYTHON_EXECUTABLE || 'python3'; // Use env var or default
+    const pythonExecutable = process.env.PYTHON_EXECUTABLE || 'python3';
 
     console.log(`[API /api/scrape-reels] Script directory: ${scriptDir}`);
     console.log(`[API /api/scrape-reels] Script path: ${scriptPath}`);
     console.log(`[API /api/scrape-reels] Python executable: ${pythonExecutable}`);
 
-    // Prepare environment variables for the Python script
-    // Ensure required variables are passed from the Next.js environment
     const scriptEnv = {
-        ...process.env, // Inherit existing env vars
-        SUPABASE_DB_URL: process.env.SUPABASE_DB_URL,
-        NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-        SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
-        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-        // NODE_API_BASE_URL: process.env.NODE_API_BASE_URL || 'http://localhost:3000', // No longer needed by Python
-        GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS, // Or your specific key variable
-        // Add any other necessary env vars for the scraper here
+      ...process.env,
+      SUPABASE_DB_URL: process.env.SUPABASE_DB_URL,
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+      GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
     };
 
-    // Validate essential env vars needed by the script
     if (!scriptEnv.SUPABASE_DB_URL) {
-      console.error('[API /api/scrape-reels] Error: SUPABASE_DB_URL environment variable is not set for the API route.');
-      return NextResponse.json({ error: 'Server configuration error: Missing database URL.' }, { status: 500 });
+      console.error('[API /api/scrape-reels] Error: SUPABASE_DB_URL environment variable is not set.');
+      return NextResponse.json({
+        originalUrl: url,
+        status: 'script_setup_error',
+        message: 'Server configuration error: Missing database URL.',
+      } as SingleProcessingResult, { status: 500 });
     }
-    
     if (!scriptEnv.SUPABASE_SERVICE_KEY && !scriptEnv.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('[API /api/scrape-reels] Error: Neither SUPABASE_SERVICE_KEY nor SUPABASE_SERVICE_ROLE_KEY environment variable is set.');
-      return NextResponse.json({ error: 'Server configuration error: Missing Supabase service key.' }, { status: 500 });
+      console.error('[API /api/scrape-reels] Error: SUPABASE_SERVICE_KEY/ROLE_KEY environment variable is not set.');
+      return NextResponse.json({
+        originalUrl: url,
+        status: 'script_setup_error',
+        message: 'Server configuration error: Missing Supabase service key.',
+      } as SingleProcessingResult, { status: 500 });
     }
 
-    // Array to hold processing results for each URL
-    const processingResults: ProcessingResult[] = [];
-
-    // --- Wrap spawn in a Promise to wait for completion ---
-    const runPythonScript = (): Promise<PythonScrapeResult[] | null> => {
+    const runPythonScriptForSingleUrl = (targetUrl: string): Promise<PythonScrapeResult | null> => {
       return new Promise((resolve, reject) => {
-        console.log(`[API /api/scrape-reels] Spawning Python script...`);
-        const pythonProcess = spawn(pythonExecutable, [scriptPath, ...urls], {
+        console.log(`[API /api/scrape-reels] Spawning Python script for URL: ${targetUrl}`);
+        // Pass the single URL to the script
+        const pythonProcess = spawn(pythonExecutable, [scriptPath, targetUrl], {
           cwd: scriptDir,
           env: scriptEnv,
           stdio: ['ignore', 'pipe', 'pipe'],
@@ -87,206 +90,210 @@ export async function POST(req: NextRequest) {
         pythonProcess.stdout.on('data', (data) => {
           const output = data.toString();
           stdout += output;
-          output.split('\n').forEach((line: string) => {
-            if (line.trim()) {
-              console.log(`[Python STDOUT]: ${line.trim()}`);
-            }
+          output.split('\\n').forEach((line: string) => {
+            if (line.trim()) console.log(`[Python STDOUT for ${targetUrl}]: ${line.trim()}`);
           });
         });
 
         pythonProcess.stderr.on('data', (data) => {
           const errorOutput = data.toString();
           stderr += errorOutput;
-          errorOutput.split('\n').forEach((line: string) => {
-            if (line.trim()) {
-              console.error(`[Python STDERR]: ${line.trim()}`);
-            }
+          errorOutput.split('\\n').forEach((line: string) => {
+            if (line.trim()) console.error(`[Python STDERR for ${targetUrl}]: ${line.trim()}`);
           });
         });
 
         pythonProcess.on('close', (code) => {
-          console.log(`[API /api/scrape-reels] Python script finished with code ${code}.`);
+          console.log(`[API /api/scrape-reels] Python script for ${targetUrl} finished with code ${code}.`);
           if (code !== 0) {
-            console.error(`[API /api/scrape-reels] Python script exited with non-zero code ${code}. Stderr: ${stderr}`);
-            // Reject or resolve with null/error indicator if needed, depends on how you handle batch errors
-            // For now, we resolve null, assuming Node.js will handle URLs it didn't get results for
-            resolve(null); 
+            console.error(`[API /api/scrape-reels] Python script for ${targetUrl} exited with code ${code}. Stderr: ${stderr}`);
+            resolve(null);
           } else {
-            // Process stdout line by line, expecting one JSON object per line
-            const results: PythonScrapeResult[] = stdout
-              .split('\n')
-              .filter(line => line.trim().startsWith('{') && line.trim().endsWith('}')) // Basic JSON line check
-              .map(line => {
+            // Robustly parse stdout: find the last line that is a valid JSON object.
+            const lines = stdout.split('\n');
+            let parsedResult: PythonScrapeResult | null = null;
+
+            for (let i = lines.length - 1; i >= 0; i--) {
+              const line = lines[i].trim();
+              if (line.startsWith('{') && line.endsWith('}')) {
                 try {
-                  return JSON.parse(line.trim()) as PythonScrapeResult;
+                  parsedResult = JSON.parse(line) as PythonScrapeResult;
+                  // Assuming the first valid JSON from the end is the intended output
+                  break;
                 } catch (parseError) {
-                  console.error(`[API /api/scrape-reels] Failed to parse JSON line from Python stdout: ${line}`, parseError);
-                  return null; // Mark line as failed parse
+                  // This line looked like JSON but wasn't, or not the one we want. Continue searching.
+                  console.warn(`[API /api/scrape-reels] Tried to parse line as JSON but failed for ${targetUrl}: ${line}`, parseError);
                 }
-              })
-              .filter(result => result !== null) as PythonScrapeResult[]; // Filter out nulls from failed parses
-            resolve(results);
+              }
+            }
+
+            if (parsedResult) {
+              // Ensure originalUrl from Python matches the input, or at least is present
+              // If Python script includes originalUrl, prefer that. Otherwise, fill it in.
+              if (!parsedResult.originalUrl) {
+                parsedResult.originalUrl = targetUrl;
+              }
+              resolve(parsedResult);
+            } else {
+              console.error(`[API /api/scrape-reels] Python script for ${targetUrl} did not output a parseable JSON line in stdout. Full stdout:\n${stdout}`);
+              // Also log stderr in this case, as it might contain the true error from Python if JSON wasn't printed.
+              if (stderr) {
+                console.error(`[API /api/scrape-reels] Python script for ${targetUrl} stderr was:\n${stderr}`);
+              }
+              resolve(null);
+            }
           }
         });
 
         pythonProcess.on('error', (err) => {
-          console.error('[API /api/scrape-reels] Failed to start Python subprocess.', err);
+          console.error(`[API /api/scrape-reels] Failed to start Python subprocess for ${targetUrl}.`, err);
           reject(err); // Reject the promise if spawning fails
         });
       });
     };
 
-    // --- Execute the script and wait for the result ---
+    const pythonResult = await runPythonScriptForSingleUrl(url);
+
+    if (!pythonResult || !pythonResult.success || !pythonResult.finalVideoUrl) {
+      const message = pythonResult?.error || 'Python script did not return successful data or finalVideoUrl for this URL.';
+      console.error(`[API /api/scrape-reels] Python error for ${url}: ${message}`);
+      return NextResponse.json({
+        originalUrl: url,
+        status: 'python_error',
+        message,
+      } as SingleProcessingResult, { status: 500 }); // Using 500 as it's a server-side script failure
+    }
+
+    // --- Start Node.js processing for successful Python scrape ---
+    const { finalVideoUrl, captionText, instagramId } = pythonResult;
+    let posterUrl: string | null = null;
+    let analysis: string | null = null;
+    let suggestedName: string | null = `Untitled Template - ${instagramId || 'UnknownID'}`;
+    let embeddingVector: number[] | null = null;
+    let templateId: string | undefined = undefined;
+
+    // Keep originalUrl from the input 'url' for consistency in the result
+    const currentProcessingUrl = url;
+
     try {
-      const pythonResults = await runPythonScript();
+      console.log(`[Node Processing ${currentProcessingUrl}] Starting API calls...`);
 
-      if (!pythonResults) {
-         console.error('[API /api/scrape-reels] Python script execution failed or returned no results.');
-         // Populate results for all URLs as python_error
-         urls.forEach(url => processingResults.push({ originalUrl: url, status: 'python_error', message: 'Python script failed to execute or returned invalid data.' }));
-      } else {
-         // Process results returned from Python
-         console.log(`[API /api/scrape-reels] Received ${pythonResults.length} results from Python.`);
-         const resultsMap = new Map(pythonResults.map(r => [r.originalUrl, r]));
-
-         for (const url of urls) {
-           const result = resultsMap.get(url);
-
-           if (!result || !result.success || !result.finalVideoUrl) {
-             const message = result?.error || 'Python script did not return successful data for this URL.';
-             console.error(`[API /api/scrape-reels] Python error for ${url}: ${message}`);
-             processingResults.push({ originalUrl: url, status: 'python_error', message });
-             continue; // Skip to next URL
-           }
-
-           // --- Start Node.js processing for successful Python scrape ---
-           const { finalVideoUrl, captionText, instagramId, originalUrl } = result;
-           let posterUrl: string | null = null;
-           let analysis: string | null = null;
-           let suggestedName: string | null = `Untitled Template - ${instagramId}`;
-           let embeddingVector: number[] | null = null;
-           let templateId: string | undefined = undefined;
-           let processingError: string | null = null;
-           let dbError: string | null = null;
-
-           try {
-              console.log(`[Node Processing ${originalUrl}] Starting API calls...`);
-              // 1. Generate Thumbnail
-              try {
-                const thumbResponse = await fetch(new URL('/api/generate-thumbnail', req.url).toString(), {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ videoUrl: finalVideoUrl }),
-                });
-                if (thumbResponse.ok) {
-                  posterUrl = (await thumbResponse.json()).thumbnailUrl;
-                  console.log(`[Node Processing ${originalUrl}] Thumbnail success: ${posterUrl}`);
-                } else {
-                  console.error(`[Node Processing ${originalUrl}] Thumbnail API failed: ${thumbResponse.status} ${await thumbResponse.text()}`);
-                }
-              } catch (e: any) {
-                console.error(`[Node Processing ${originalUrl}] Thumbnail API fetch error: ${e.message}`);
-              }
-
-              // 2. Analyze Template
-              try {
-                const analyzeResponse = await fetch(new URL('/api/analyze-video-template', req.url).toString(), {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ videoUrl: finalVideoUrl, exampleCaption: captionText }),
-                });
-                if (analyzeResponse.ok) {
-                  const data = await analyzeResponse.json();
-                  analysis = data.analysis ?? null;
-                  if (data.suggestedName) {
-                      suggestedName = data.suggestedName;
-                  }
-                  console.log(`[Node Processing ${originalUrl}] Analysis success. Name: ${suggestedName}`);
-                } else {
-                  console.error(`[Node Processing ${originalUrl}] Analysis API failed: ${analyzeResponse.status} ${await analyzeResponse.text()}`);
-                  analysis = 'Analysis failed.'; // Set placeholder on error
-                }
-              } catch (e: any) {
-                console.error(`[Node Processing ${originalUrl}] Analysis API fetch error: ${e.message}`);
-                analysis = 'Analysis failed.'; // Set placeholder on error
-              }
-
-              // 3. Generate Embedding (only if analysis exists)
-              if (analysis) {
-                 try {
-                   embeddingVector = await generateEmbedding(analysis);
-                   console.log(`[Node Processing ${originalUrl}] Embedding success. Length: ${embeddingVector?.length}`);
-                 } catch (e: any) {
-                   console.error(`[Node Processing ${originalUrl}] Embedding generation error: ${e.message}`);
-                   embeddingVector = null; // Set to null on error
-                 }
-              } else {
-                 console.warn(`[Node Processing ${originalUrl}] Skipping embedding: analysis is empty.`);
-              }
-
-           } catch (err: any) {
-              console.error(`[Node Processing ${originalUrl}] Error during API calls: ${err.message}`);
-              processingError = err.message;
-           }
-
-           // 4. Insert into Database (only if no critical processing error occurred)
-           if (!processingError) {
-               try {
-                   console.log(`[Node Processing ${originalUrl}] Inserting into database...`);
-                   const { data, error } = await supabaseAdmin
-                       .from('meme_templates')
-                       .insert({
-                           name: suggestedName,
-                           video_url: finalVideoUrl,
-                           poster_url: posterUrl,
-                           instructions: analysis,
-                           original_source_url: originalUrl,
-                           embedding: embeddingVector,
-                           reviewed: false, // Mark as unreviewed
-                           uploader_name: 'Scraper'
-                       })
-                       .select('id') // Select the ID of the inserted row
-                       .single();
-
-                   if (error) {
-                       throw error;
-                   }
-                   templateId = data?.id;
-                   console.log(`[Node Processing ${originalUrl}] Database insert successful. ID: ${templateId}`);
-
-               } catch (err: any) {
-                   console.error(`[Node Processing ${originalUrl}] Database insert error:`, err);
-                   dbError = err.message || 'Unknown database error';
-               }
-           }
-
-           // Determine final status for this URL
-           if (dbError) {
-               processingResults.push({ originalUrl, status: 'db_error', message: `DB insert failed: ${dbError}` });
-           } else if (processingError) {
-               processingResults.push({ originalUrl, status: 'processing_error', message: `API processing failed: ${processingError}` });
-           } else {
-               processingResults.push({ originalUrl, status: 'success', message: 'Successfully processed and added for review.', templateId });
-           }
-         }
+      // 1. Generate Thumbnail
+      try {
+        const thumbResponse = await fetch(new URL('/api/generate-thumbnail', req.url).toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoUrl: finalVideoUrl }),
+        });
+        if (thumbResponse.ok) {
+          posterUrl = (await thumbResponse.json()).thumbnailUrl;
+          console.log(`[Node Processing ${currentProcessingUrl}] Thumbnail success: ${posterUrl}`);
+        } else {
+          console.error(`[Node Processing ${currentProcessingUrl}] Thumbnail API failed: ${thumbResponse.status} ${await thumbResponse.text()}`);
+        }
+      } catch (e: any) {
+        console.error(`[Node Processing ${currentProcessingUrl}] Thumbnail API fetch error: ${e.message}`);
       }
 
-      // --- Return final results --- 
-      console.log("[API /api/scrape-reels] Processing complete. Final results:", processingResults);
-      return NextResponse.json({ results: processingResults });
+      // 2. Analyze Template
+      try {
+        const analyzeResponse = await fetch(new URL('/api/analyze-video-template', req.url).toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoUrl: finalVideoUrl, exampleCaption: captionText }),
+        });
+        if (analyzeResponse.ok) {
+          const data = await analyzeResponse.json();
+          analysis = data.analysis ?? null;
+          if (data.suggestedName) {
+            suggestedName = data.suggestedName;
+          }
+          console.log(`[Node Processing ${currentProcessingUrl}] Analysis success. Name: ${suggestedName}`);
+        } else {
+          console.error(`[Node Processing ${currentProcessingUrl}] Analysis API failed: ${analyzeResponse.status} ${await analyzeResponse.text()}`);
+          analysis = 'Analysis failed.';
+        }
+      } catch (e: any) {
+        console.error(`[Node Processing ${currentProcessingUrl}] Analysis API fetch error: ${e.message}`);
+        analysis = 'Analysis failed.';
+      }
 
-    } catch (spawnError) {
-       // Handle errors during the spawning process itself (e.g., python not found)
-        console.error('[API /api/scrape-reels] Error executing Python script:', spawnError);
-        return NextResponse.json({ error: 'Failed to execute backend processing script.' }, { status: 500 });
+      // 3. Generate Embedding (only if analysis exists and is not "Analysis failed.")
+      if (analysis && analysis !== 'Analysis failed.') {
+        try {
+          embeddingVector = await generateEmbedding(analysis);
+          console.log(`[Node Processing ${currentProcessingUrl}] Embedding success. Length: ${embeddingVector?.length}`);
+        } catch (e: any) {
+          console.error(`[Node Processing ${currentProcessingUrl}] Embedding generation error: ${e.message}`);
+          embeddingVector = null;
+        }
+      } else {
+        console.warn(`[Node Processing ${currentProcessingUrl}] Skipping embedding: analysis is empty or failed.`);
+      }
+
+      // 4. Insert into Database
+      console.log(`[Node Processing ${currentProcessingUrl}] Inserting into database...`);
+      const { data: dbData, error: dbError } = await supabaseAdmin
+        .from('meme_templates')
+        .insert({
+          name: suggestedName,
+          video_url: finalVideoUrl,
+          poster_url: posterUrl,
+          instructions: analysis,
+          original_source_url: currentProcessingUrl, // Use the consistent input URL
+          embedding: embeddingVector,
+          reviewed: false,
+          uploader_name: 'Scraper',
+          // instagram_id: instagramId // Temporarily commented out
+        })
+        .select('id')
+        .single();
+
+      if (dbError) {
+        console.error(`[Node Processing ${currentProcessingUrl}] Database insertion error:`, dbError);
+        return NextResponse.json({
+          originalUrl: currentProcessingUrl,
+          status: 'db_error',
+          message: `Database insertion failed: ${dbError.message}`,
+          finalVideoUrl, // Include these details for context even on DB error
+          posterUrl,
+          analysis,
+          suggestedName,
+        } as SingleProcessingResult, { status: 500 });
+      }
+
+      templateId = dbData?.id;
+      console.log(`[Node Processing ${currentProcessingUrl}] Database insertion success. Template ID: ${templateId}`);
+
+      return NextResponse.json({
+        originalUrl: currentProcessingUrl,
+        status: 'success',
+        message: 'Reel processed and template created successfully.',
+        templateId,
+        finalVideoUrl,
+        posterUrl,
+        analysis,
+        suggestedName,
+      } as SingleProcessingResult, { status: 200 });
+
+    } catch (err: any) {
+      console.error(`[Node Processing ${currentProcessingUrl}] Error during Node.js processing stage: ${err.message}`, err);
+      return NextResponse.json({
+        originalUrl: currentProcessingUrl,
+        status: 'processing_error',
+        message: `Error during server-side processing: ${err.message}`,
+        finalVideoUrl, // Include for context
+      } as SingleProcessingResult, { status: 500 });
     }
 
-  } catch (error) {
-    console.error('[API /api/scrape-reels] Unexpected error in POST handler:', error);
-    // Check if the error is related to JSON parsing
-    if (error instanceof SyntaxError) {
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[API /api/scrape-reels] Unhandled error in POST handler:', error);
+    // Use originalUrlInput if available, otherwise indicate it was too early to capture
+    const errorUrl = originalUrlInput || 'Unknown (error before URL parsing)';
+    return NextResponse.json({
+        originalUrl: errorUrl,
+        status: 'processing_error', // Or a more generic 'server_error'
+        message: error.message || 'An unexpected error occurred on the server.',
+    } as SingleProcessingResult, { status: 500 });
   }
 } 
