@@ -17,6 +17,7 @@ const LOCALSTORAGE_PERSONA_ID_KEY = 'memeSelectorV2_selectedPersonaId';
 const LOCALSTORAGE_RULE_SET_ID_KEY = 'memeSelectorV2_selectedRuleSetId';
 const LOCALSTORAGE_RULE_SET_ID_KEY_2 = 'memeSelectorV2_selectedRuleSetId2'; // New key for second rule set
 const LOCALSTORAGE_CATEGORY_KEY = 'memeSelectorV2_selectedCategory'; // <-- New key for category
+const LOCALSTORAGE_TEMPERATURE_API1_KEY = 'memeSelectorV2_temperatureApi1'; // New key for API1 temperature
 
 // Define the Persona type (should match PersonaManager)
 interface Persona {
@@ -107,6 +108,7 @@ export default function MemeSelectorV2() {
   const [selectedRuleSetId, setSelectedRuleSetId] = useState<string>(''); // Store selected rule set ID ('' for default)
   const [selectedRuleSetId2, setSelectedRuleSetId2] = useState<string>(''); // Store selected second rule set ID ('' for none)
   const [selectedCategory, setSelectedCategory] = useState<string>(''); // <-- New state for category
+  const [temperatureApi1, setTemperatureApi1] = useState<number>(0.7); // <-- New state for API1 temperature
   const [userPrompt, setUserPrompt] = useState<string>(''); // Optional prompt
   const [isGreenscreenMode, setIsGreenscreenMode] = useState<boolean>(false); // Greenscreen mode state
   const [isLoadingTemplates, setIsLoadingTemplates] = useState<boolean>(false);
@@ -161,6 +163,7 @@ export default function MemeSelectorV2() {
     const savedRuleSetId = localStorage.getItem(LOCALSTORAGE_RULE_SET_ID_KEY);
     const savedRuleSetId2 = localStorage.getItem(LOCALSTORAGE_RULE_SET_ID_KEY_2); // Load second rule set ID
     const savedCategory = localStorage.getItem(LOCALSTORAGE_CATEGORY_KEY); // <-- Load category
+    const savedTemperatureApi1 = localStorage.getItem(LOCALSTORAGE_TEMPERATURE_API1_KEY); // Load API1 temperature
     if (savedPersonaId) {
       setSelectedPersonaId(savedPersonaId);
     }
@@ -172,6 +175,9 @@ export default function MemeSelectorV2() {
     }
     if (savedCategory) { // <-- Set category state
       setSelectedCategory(savedCategory);
+    }
+    if (savedTemperatureApi1) { // <-- Set API1 temperature state
+      setTemperatureApi1(parseFloat(savedTemperatureApi1));
     }
     // Run only once on mount
   }, []); 
@@ -214,6 +220,11 @@ export default function MemeSelectorV2() {
       localStorage.removeItem(LOCALSTORAGE_CATEGORY_KEY);
     }
   }, [selectedCategory]);
+
+  // Effect to save API1 temperature to localStorage
+  useEffect(() => {
+    localStorage.setItem(LOCALSTORAGE_TEMPERATURE_API1_KEY, temperatureApi1.toString());
+  }, [temperatureApi1]);
 
   // Effect to handle zero personas case
   useEffect(() => {
@@ -310,7 +321,7 @@ export default function MemeSelectorV2() {
             { role: 'system', content: primarySystemPrompt }, // Using the primary prompt
             { role: 'user', content: userMessage }
           ],
-          temperature: 0.7
+          temperature: temperatureApi1 // Use state variable here
         };
         
         const promise1 = fetch('/api/ai/chat', { // Auth handled via cookie
@@ -648,6 +659,7 @@ export default function MemeSelectorV2() {
      setUserPrompt('');
      setSelectedRuleSetId2(''); // Reset second rule set selection
      setSelectedCategory(''); // <-- Reset category selection
+     setTemperatureApi1(0.7); // <-- Reset API1 temperature to default
      setIsGreenscreenMode(false); // Reset greenscreen mode
      setSelectedFinalTemplate(null);
      setSelectedFinalCaption(null);
@@ -656,6 +668,7 @@ export default function MemeSelectorV2() {
      localStorage.removeItem(LOCALSTORAGE_RULE_SET_ID_KEY);
      localStorage.removeItem(LOCALSTORAGE_RULE_SET_ID_KEY_2); // Clear second rule set storage
      localStorage.removeItem(LOCALSTORAGE_CATEGORY_KEY); // <-- Clear category storage
+     localStorage.removeItem(LOCALSTORAGE_TEMPERATURE_API1_KEY); // <-- Clear API1 temperature storage
   };
 
   // --- New Handlers for Edit Details Modal ---
@@ -1044,6 +1057,23 @@ export default function MemeSelectorV2() {
             </div>
             {/* Display the same error message if rule sets fail to load */}
             {ruleSetsError && <p className="text-xs text-red-400 mt-1">Error loading rule sets.</p>}
+          </div>
+
+          {/* Temperature for Primary API Call - NEW */} 
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Temperature (Primary AI Call)
+            </label>
+            <input
+              type="number"
+              value={temperatureApi1}
+              onChange={(e) => setTemperatureApi1(parseFloat(e.target.value))}
+              min="0"
+              max="1"
+              step="0.1"
+              className="w-full p-3 border border-gray-700 bg-gray-700 text-white rounded-md focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            />
+            <p className="text-xs text-gray-400 mt-1">Controls randomness for the first set of captions (0.0 - 1.0).</p>
           </div>
 
           {/* Category Selection - NEW */} 
