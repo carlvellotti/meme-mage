@@ -215,17 +215,25 @@ export async function createMemePreview(
           tempCtx.putImageData(imageData, 0, 0);
           
           // Draw processed frame onto main canvas
-          ctx.drawImage(tempCanvas, 0, yOffset, targetWidth, targetHeight);
+          // Apply videoVerticalOffset if provided and not in cropped mode (for greenscreen)
+          let finalYOffset = yOffset; // Default yOffset
+          if (videoVerticalOffset !== undefined && !isCropped) { // Check !isCropped directly
+            const desiredCenterY = (canvasHeight * videoVerticalOffset) / 100;
+            const calculatedYOffset = desiredCenterY - (targetHeight / 2);
+            finalYOffset = Math.max(0, Math.min(calculatedYOffset, canvasHeight - targetHeight));
+          }
+          ctx.drawImage(tempCanvas, 0, finalYOffset, targetWidth, targetHeight);
         } else {
           // Regular video drawing
-          // Apply videoVerticalOffset if provided and not in greenscreen/cropped mode
-          if (videoVerticalOffset !== undefined && !isGreenscreen && !isCropped) {
+          // Apply videoVerticalOffset if provided and not in cropped mode
+          let finalYOffset = yOffset; // Default yOffset
+          if (videoVerticalOffset !== undefined && !isCropped) { // MODIFIED HERE
             const desiredCenterY = (canvasHeight * videoVerticalOffset) / 100;
             const calculatedYOffset = desiredCenterY - (targetHeight / 2);
             // Clamp to ensure video stays within canvas bounds
-            yOffset = Math.max(0, Math.min(calculatedYOffset, canvasHeight - targetHeight));
+            finalYOffset = Math.max(0, Math.min(calculatedYOffset, canvasHeight - targetHeight));
           }
-          ctx.drawImage(video, 0, yOffset, targetWidth, targetHeight);
+          ctx.drawImage(video, 0, finalYOffset, targetWidth, targetHeight);
         }
         
         // Draw caption

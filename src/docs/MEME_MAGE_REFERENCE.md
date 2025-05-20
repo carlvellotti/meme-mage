@@ -372,3 +372,56 @@ Several issues were encountered and resolved during the implementation of the ca
     *   `instructions TEXT`: Stores the AI's analysis of the template. Updated by the re-analysis.
     *   `name TEXT`: Stores the AI's suggested name for the template. Updated by the re-analysis.
     *   `embedding VECTOR`: Updated with the embedding of the new `instructions` after re-analysis.
+
+## Feature: Meme Generation & Canvas Preview
+
+**Goal:** To allow users to select a template, add a caption, choose a background (for greenscreen), and see a live preview on a canvas, then download the final video.
+
+**Core Components & Flow:**
+
+1.  **Frontend UI (`src/app/components/MemeGenerator.tsx`):**
+    *   Manages user inputs for caption, background selection (if `isGreenscreenMode`), text settings (font, size, color, alignment, vertical position), label overlays, and watermark settings.
+    *   **Video Vertical Offset:**
+        *   A slider control allows the user to adjust the vertical position of the main video content within the canvas.
+        *   This is controlled by the `videoVerticalOffset` state variable (a number representing percentage from the top, 0-100).
+        *   The slider is available and active if the `isCropped` state is `false`. This typically means it's available for:
+            *   Standard (non-greenscreen) videos that are *not* in the dynamic cropped layout.
+            *   Greenscreen videos (as they usually use the full canvas height and `isCropped` is false).
+        *   The `videoVerticalOffset` value is passed to the `useVideoProcessing` hook.
+
+2.  **Video Processing Hook (`src/app/lib/hooks/useVideoProcessing.ts`):**
+    *   Receives `videoVerticalOffset` as part of its parameters for `generatePreview` and `processAndDownloadMeme`.
+    *   Passes this `videoVerticalOffset` directly to `createMemePreview` (in `src/lib/utils/previewGenerator.ts`) and `createMemeVideo` (in `src/lib/utils/videoProcessor.ts`).
+
+3.  **Canvas Rendering Logic (`src/lib/utils/previewGenerator.ts` and `src/lib/utils/videoProcessor.ts`):**
+    *   Both utility functions share similar core drawing logic.
+    *   **Applying `videoVerticalOffset`:**
+        *   Inside their respective rendering functions (e.g., `processFrame` in `previewGenerator` or `renderFrame` in `videoProcessor`), the `videoVerticalOffset` parameter is used to adjust the `y` coordinate where the video (or processed greenscreen frame) is drawn onto the canvas.
+        *   The logic is typically:
+            ```typescript
+            let finalYOffset = yOffset; // yOffset is the default centered position
+            if (videoVerticalOffset !== undefined && !isCropped) {
+              const desiredCenterY = (canvasHeight * videoVerticalOffset) / 100;
+              const calculatedYOffset = desiredCenterY - (targetHeight / 2);
+              finalYOffset = Math.max(0, Math.min(calculatedYOffset, canvasHeight - targetHeight)); // Clamp to bounds
+            }
+            ctx.drawImage(videoOrProcessedFrame, 0, finalYOffset, targetWidth, targetHeight);
+            ```
+        *   This ensures the offset is applied if provided by the user and the meme is not using the dynamic cropped layout (where `isCropped` would be true). The `!isGreenscreen` check was previously part of this condition but was removed to allow offset for greenscreen videos as well.
+
+4.  **Greenscreen Handling:**
+    *   If `isGreenscreenMode` is true, a background image can be selected.
+    *   The video has its green background keyed out, and the processed video frame is composited over the chosen background image.
+    *   The `videoVerticalOffset` applies to the position of this keyed-out video layer on the canvas.
+
+5.  **Cropped Mode Handling (Non-Greenscreen):**
+    *   If `isCropped` is true (typically for non-greenscreen videos where the canvas height adjusts to fit the caption and video tightly):
+        *   The `videoVerticalOffset` slider is disabled in the UI.
+        *   The `videoVerticalOffset` value passed to the drawing functions is `undefined`.
+        *   The video's vertical position is determined by fixed padding rules relative to the caption text, not by the `videoVerticalOffset`.
+
+6.  **Other Features:**
+    *   Text overlay with customizable settings.
+    *   Label overlays (for non-cropped modes).
+    *   Watermark functionality.
+    *   Download of the generated meme as an MP4 video.

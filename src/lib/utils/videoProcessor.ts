@@ -197,7 +197,15 @@ export async function createMemeVideo(
         
         // Process video frame with greenscreen removal
         const processedFrame = processGreenscreen(videoElement, targetWidth, targetHeight);
-        ctx.drawImage(processedFrame, 0, yOffset, targetWidth, targetHeight);
+        
+        // Apply videoVerticalOffset if provided and not in cropped mode (for greenscreen)
+        let finalYOffset = yOffset; // Default yOffset
+        if (videoVerticalOffset !== undefined && !isCropped) { 
+            const desiredCenterY = (standardHeight * videoVerticalOffset) / 100;
+            const calculatedYOffset = desiredCenterY - (targetHeight / 2);
+            finalYOffset = Math.max(0, Math.min(calculatedYOffset, standardHeight - targetHeight));
+        }
+        ctx.drawImage(processedFrame, 0, finalYOffset, targetWidth, targetHeight);
       } else {
         // Regular video drawing
         if (isCropped) {
@@ -237,13 +245,14 @@ export async function createMemeVideo(
           ctx.drawImage(videoElement, 0, videoTop, targetWidth, targetHeight);
         } else {
           // Standard video drawing
-          // Apply videoVerticalOffset if provided and conditions met
-          if (videoVerticalOffset !== undefined && !isGreenscreen && !isCropped) {
+          // Apply videoVerticalOffset if provided and not in cropped mode
+          let finalYOffset = yOffset; // Default yOffset
+          if (videoVerticalOffset !== undefined && !isCropped) {
             const desiredCenterY = (standardHeight * videoVerticalOffset) / 100;
             const calculatedYOffset = desiredCenterY - (targetHeight / 2);
-            yOffset = Math.max(0, Math.min(calculatedYOffset, standardHeight - targetHeight));
+            finalYOffset = Math.max(0, Math.min(calculatedYOffset, standardHeight - targetHeight));
           }
-          ctx.drawImage(videoElement, 0, yOffset, targetWidth, targetHeight);
+          ctx.drawImage(videoElement, 0, finalYOffset, targetWidth, targetHeight);
         }
       }
 
