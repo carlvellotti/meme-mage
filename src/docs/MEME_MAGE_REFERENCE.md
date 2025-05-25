@@ -375,53 +375,407 @@ Several issues were encountered and resolved during the implementation of the ca
 
 ## Feature: Meme Generation & Canvas Preview
 
-**Goal:** To allow users to select a template, add a caption, choose a background (for greenscreen), and see a live preview on a canvas, then download the final video.
+**Goal:** To provide users with an intuitive interface for creating memes by selecting templates, adding captions, customizing text styling, choosing backgrounds (for greenscreen), and generating both live canvas previews and downloadable video files with consistent rendering quality.
+
+### Architecture Overview
+
+The meme generation system consists of three main layers that work together to ensure consistent rendering between preview and final video:
+
+1. **UI Layer (`MemeGenerator.tsx`)** - Manages user inputs and state
+2. **Processing Hook (`useVideoProcessing.ts`)** - Coordinates preview and video generation
+3. **Rendering Utilities (`previewGenerator.ts` & `videoProcessor.ts`)** - Handle actual canvas/video rendering
+
+### Core Components & Technical Flow
+
+#### 1. Frontend UI (`src/app/components/MemeGenerator.tsx`)
+
+**State Management:**
+- `caption`: User's text input for the meme caption
+- `textSettings`: Font, size, color, alignment, vertical position, stroke weight, background settings
+- `selectedBackground`: Background image URL for greenscreen templates
+- `labels`: Array of positioned text labels for non-cropped modes
+- `watermarkSettings`: Watermark text, position, styling, and background options
+- `videoVerticalOffset`: Percentage-based vertical positioning (0-100) for video placement
+- `isCropped`: Boolean determining layout mode (dynamic height vs. fixed canvas)
+- `isGreenscreenMode`: Boolean indicating greenscreen template processing
+
+**Key UI Controls:**
+- **Caption Input:** Text area for main meme text
+- **Text Styling Panel:** Font selection, size, color, alignment, vertical position, stroke weight
+- **Text Background Panel:** Background color, opacity settings for improved readability
+- **Video Position Slider:** Vertical offset control (disabled in cropped mode)
+- **Background Selector:** Image picker for greenscreen backgrounds
+- **Label Manager:** Add/edit positioned text labels (non-cropped only)
+- **Watermark Settings:** Text, position, styling, and background options
+
+**Layout Mode Logic:**
+```typescript
+// Cropped mode: Canvas height dynamically adjusts to content
+isCropped = !isGreenscreenMode && someCondition;
+
+// Non-cropped mode: Fixed 1080x1920 canvas with flexible positioning
+isCropped = false;
+```
+
+#### 2. Video Processing Hook (`src/app/lib/hooks/useVideoProcessing.ts`)
+
+**Purpose:** Centralized coordination between preview generation and video processing to ensure parameter consistency.
+
+**Key Functions:**
+- `generatePreview()`: Creates live canvas preview using `previewGenerator.ts`
+- `processAndDownloadMeme()`: Generates final video using `videoProcessor.ts`
+
+**Parameter Passing:**
+```typescript
+// Both functions receive identical parameters to ensure consistency
+const sharedParams = {
+  videoUrl,
+  caption,
+  backgroundImage: selectedBackground,
+  isGreenscreen: isGreenscreenMode,
+  textSettings,
+  labels,
+  labelSettings,
+  isCropped,
+  isWatermarkEnabled,
+  watermarkSettings,
+  videoVerticalOffset
+};
+
+// Preview generation (real-time)
+await createMemePreview(previewCanvas, ...sharedParams);
+
+// Video generation (download)
+const videoBlob = await createMemeVideo(...sharedParams);
+```
+
+#### 3. Canvas Rendering System
+
+Both `previewGenerator.ts` and `videoProcessor.ts` implement identical rendering logic to ensure visual consistency between preview and final video.
+
+**Shared Rendering Pipeline:**
+
+1. **Canvas Setup**
+   ```typescript
+   // Standard dimensions
+   const standardWidth = 1080;
+   const standardHeight = 1920;
+   
+   // Dynamic height calculation for cropped mode
+   if (isCropped && !isGreenscreen) {
+     const estimatedTextHeight = calculateTextHeight(caption, textSettings);
+     canvas.height = 30 + estimatedTextHeight + 15 + videoHeight + 15;
+   } else {
+     canvas.height = standardHeight; // Fixed height
+   }
+   ```
+
+2. **Video Positioning Logic**
+   ```typescript
+   // Calculate base video position
+   const videoAspect = video.width / video.height;
+   const targetWidth = standardWidth;
+   const targetHeight = targetWidth / videoAspect;
+   let yOffset = (canvas.height - targetHeight) / 2; // Default center
+   
+   // Apply user's vertical offset (non-cropped mode only)
+   if (videoVerticalOffset !== undefined && !isCropped) {
+     const desiredCenterY = (canvas.height * videoVerticalOffset) / 100;
+     const calculatedYOffset = desiredCenterY - (targetHeight / 2);
+     yOffset = Math.max(0, Math.min(calculatedYOffset, canvas.height - targetHeight));
+   }
+   
+   // Special positioning for cropped mode
+   if (isCropped && !isGreenscreen) {
+     const textBottom = calculateTextBottom(caption, textSettings);
+     yOffset = textBottom + 15; // Fixed 15px gap below text
+   }
+   ```
+
+3. **Greenscreen Processing**
+   ```typescript
+   function processGreenscreen(video, width, height) {
+     // Create temporary canvas for chroma key processing
+     const tempCanvas = document.createElement('canvas');
+     const ctx = tempCanvas.getContext('2d');
+     
+     // Draw video frame
+     ctx.drawImage(video, 0, 0, width, height);
+     
+     // Get pixel data for processing
+     const imageData = ctx.getImageData(0, 0, width, height);
+     const pixels = imageData.data;
+     
+     // Green screen removal algorithm
+     for (let i = 0; i < pixels.length; i += 4) {
+       const r = pixels[i];
+       const g = pixels[i + 1];
+       const b = pixels[i + 2];
+       
+       // Detect green pixels and make transparent
+       if (g > 100 && g > 1.4 * r && g > 1.4 * b) {
+         pixels[i + 3] = 0; // Set alpha to 0 (transparent)
+       }
+     }
+     
+     ctx.putImageData(imageData, 0, 0);
+     return tempCanvas;
+   }
+   ```
+
+4. **Text Rendering System**
+   
+   **Critical Fix Applied:** The text rendering was standardized between preview and video to ensure consistency:
+   
+   ```typescript
+   function drawCaption(ctx, caption, canvasWidth, canvasHeight, textSettings, isCropped) {
+     const font = textSettings?.font || 'Impact';
+     const size = textSettings?.size || 78;
+     const strokeWeight = textSettings?.strokeWeight || 0.08;
+     
+     // FIXED: Correct stroke width calculation
+     ctx.lineWidth = size * strokeWeight; // Multiply by font size, not strokeWeight
+     
+     // Text positioning logic
+     let y;
+     if (isCropped) {
+       ctx.textBaseline = 'top';
+       y = 30; // Fixed 30px from top
+     } else {
+       ctx.textBaseline = 'bottom';
+       y = (canvasHeight * verticalPosition) / 100;
+     }
+     
+     // FIXED: Simplified Y calculation for consistency
+     lines.forEach((line, index) => {
+       let currentLineY;
+       if (isCropped) {
+         currentLineY = y + (index * lineHeight);
+       } else {
+         // Position so BOTTOM of LAST line is at specified vertical position
+         currentLineY = y - (lines.length - 1 - index) * lineHeight;
+       }
+       
+       // Draw stroke and fill
+       ctx.strokeText(line, x, currentLineY);
+       ctx.fillText(line, x, currentLineY);
+     });
+   }
+   ```
+
+5. **Label and Watermark Rendering**
+   ```typescript
+   // Labels (non-cropped mode only)
+   if (labels && !isCropped) {
+     labels.forEach(label => {
+       const x = canvasWidth * (label.horizontalPosition / 100);
+       const y = canvasHeight * (label.verticalPosition / 100);
+       // Render with background and stroke
+     });
+   }
+   
+   // Watermark (positioned relative to video bounds)
+   if (isWatermarkEnabled && watermarkSettings) {
+     const videoRect = calculateVideoRect(yOffset, targetWidth, targetHeight);
+     const watermarkX = videoRect.x + (watermarkSettings.horizontalPosition / 100) * videoRect.width;
+     const watermarkY = videoRect.y + (watermarkSettings.verticalPosition / 100) * videoRect.height;
+     drawWatermark(ctx, watermarkX, watermarkY, watermarkSettings);
+   }
+   ```
+
+#### 4. Video Processing Specifics (`src/lib/utils/videoProcessor.ts`)
+
+**Media Handling:**
+- Uses `HTMLVideoElement` and `HTMLCanvasElement` for video capture
+- Implements `MediaRecorder` API for video encoding
+- Handles audio stream synchronization
+- Supports multiple codec formats with fallback
+
+**Recording Pipeline:**
+```typescript
+// Set up canvas stream with 30fps
+const canvasStream = canvas.captureStream(30);
+
+// Add audio track from video
+const audioStream = videoElement.captureStream();
+const audioTracks = audioStream.getAudioTracks();
+if (audioTracks.length > 0) {
+  canvasStream.addTrack(audioTracks[0]);
+}
+
+// Create recorder with optimized settings
+const recorder = new MediaRecorder(canvasStream, {
+  mimeType: 'video/mp4;codecs=h264,aac', // With fallbacks
+  videoBitsPerSecond: 8000000, // 8Mbps for quality
+});
+
+// Sync recording with video playback
+videoElement.addEventListener('timeupdate', handleTimeUpdate);
+const earlyStopTime = videoDuration - 0.1; // Stop before video ends
+```
+
+**Frame Rendering Loop:**
+```typescript
+const renderFrame = () => {
+  // Clear canvas
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw background (greenscreen mode)
+  if (isGreenscreen && backgroundImage) {
+    ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+    const processedFrame = processGreenscreen(videoElement, targetWidth, targetHeight);
+    ctx.drawImage(processedFrame, 0, finalYOffset, targetWidth, targetHeight);
+  } else {
+    // Draw video directly
+    ctx.drawImage(videoElement, 0, finalYOffset, targetWidth, targetHeight);
+  }
+  
+  // Draw text layers
+  drawCaption(ctx, caption, canvas.width, canvas.height, textSettings, isCropped);
+  drawLabels(ctx, labels, canvas.width, canvas.height, labelSettings);
+  drawWatermark(ctx, watermarkX, watermarkY, watermarkSettings);
+};
+
+// Animation loop during recording
+const updateCanvas = () => {
+  renderFrame();
+  animationFrameId = requestAnimationFrame(updateCanvas);
+};
+```
+
+#### 5. Layout Modes
+
+**Cropped Mode (`isCropped = true`):**
+- Canvas height dynamically adjusts to content
+- Text positioned 30px from top
+- Video positioned 15px below text
+- 15px bottom padding
+- Video vertical offset disabled
+- Labels disabled (incompatible with dynamic height)
+
+**Standard Mode (`isCropped = false`):**
+- Fixed 1080x1920 canvas
+- Text positioned by percentage (vertical position setting)
+- Video positioned by percentage (with vertical offset override)
+- Labels enabled with percentage positioning
+- Full watermark support
+
+**Greenscreen Mode (`isGreenscreen = true`):**
+- Always uses standard mode (fixed canvas)
+- Background image fills entire canvas
+- Video processed for chroma key removal
+- Video composited over background
+- All positioning features available
+
+#### 6. Consistency Mechanisms
+
+**Parameter Synchronization:**
+- `useVideoProcessing` hook ensures identical parameters passed to both preview and video generation
+- Shared TypeScript interfaces enforce parameter consistency
+- Common utility functions used by both rendering paths
+
+**Rendering Standardization:**
+- Identical drawing functions (`drawCaption`, `drawLabels`, `drawWatermark`)
+- Shared text wrapping and measurement logic
+- Consistent stroke width calculations
+- Unified positioning algorithms
+
+**Testing & Validation:**
+- Preview serves as real-time validation of final video output
+- Changes in preview immediately reflect in video generation
+- User can verify appearance before initiating download
+
+### Error Handling & Performance
+
+**Resource Management:**
+- Proper cleanup of media elements and streams
+- Canvas element lifecycle management
+- Memory cleanup on component unmount
+
+**Error Recovery:**
+- Graceful fallback for unsupported codecs
+- Audio capture fallback mechanisms
+- Canvas API error handling
+
+**Performance Optimization:**
+- 30fps recording for smooth playback
+- Optimized greenscreen processing
+- Efficient text measurement and caching
+- Strategic animation frame usage
+
+## Feature: Adding New AI Models for Caption Generation
+
+**Goal:** To expand the list of available AI models that can be used to generate meme captions within the `MemeSelectorV2.tsx` component.
 
 **Core Components & Flow:**
 
-1.  **Frontend UI (`src/app/components/MemeGenerator.tsx`):**
-    *   Manages user inputs for caption, background selection (if `isGreenscreenMode`), text settings (font, size, color, alignment, vertical position), label overlays, and watermark settings.
-    *   **Video Vertical Offset:**
-        *   A slider control allows the user to adjust the vertical position of the main video content within the canvas.
-        *   This is controlled by the `videoVerticalOffset` state variable (a number representing percentage from the top, 0-100).
-        *   The slider is available and active if the `isCropped` state is `false`. This typically means it's available for:
-            *   Standard (non-greenscreen) videos that are *not* in the dynamic cropped layout.
-            *   Greenscreen videos (as they usually use the full canvas height and `isCropped` is false).
-        *   The `videoVerticalOffset` value is passed to the `useVideoProcessing` hook.
+Adding a new AI model for caption generation involves modifications in two primary locations: the frontend component responsible for displaying model choices and making requests, and the backend API route that handles a_i_chat requests and interfaces with the various AI providers via the Vercel AI SDK.
 
-2.  **Video Processing Hook (`src/app/lib/hooks/useVideoProcessing.ts`):**
-    *   Receives `videoVerticalOffset` as part of its parameters for `generatePreview` and `processAndDownloadMeme`.
-    *   Passes this `videoVerticalOffset` directly to `createMemePreview` (in `src/lib/utils/previewGenerator.ts`) and `createMemeVideo` (in `src/lib/utils/videoProcessor.ts`).
+1.  **Frontend Modifications (`src/app/components/MemeSelectorV2.tsx`):**
+    *   **Update Model List:** Add the new model's user-facing identifier to the `models` array. This array populates the internal list of models for which captions will be generated.
+        ```typescript
+        // Example: Adding 'new-model-id'
+        const models = [
+          'anthropic-3.5',
+          'claude-sonnet-4-20250514',
+          'new-model-id', // <-- Add new model here
+          // ... other existing models
+        ];
+        ```
+    *   **Update Display Name Function:** Add a case to the `getModelDisplayName` function to provide a user-friendly name for the new model in the UI.
+        ```typescript
+        const getModelDisplayName = (modelId: string) => {
+          switch (modelId) {
+            // ... existing cases ...
+            case "new-model-id": // <-- Add case for new model
+              return "New Model Pretty Name";
+            default:
+              return modelId;
+          }
+        };
+        ```
 
-3.  **Canvas Rendering Logic (`src/lib/utils/previewGenerator.ts` and `src/lib/utils/videoProcessor.ts`):**
-    *   Both utility functions share similar core drawing logic.
-    *   **Applying `videoVerticalOffset`:**
-        *   Inside their respective rendering functions (e.g., `processFrame` in `previewGenerator` or `renderFrame` in `videoProcessor`), the `videoVerticalOffset` parameter is used to adjust the `y` coordinate where the video (or processed greenscreen frame) is drawn onto the canvas.
-        *   The logic is typically:
-            ```typescript
-            let finalYOffset = yOffset; // yOffset is the default centered position
-            if (videoVerticalOffset !== undefined && !isCropped) {
-              const desiredCenterY = (canvasHeight * videoVerticalOffset) / 100;
-              const calculatedYOffset = desiredCenterY - (targetHeight / 2);
-              finalYOffset = Math.max(0, Math.min(calculatedYOffset, canvasHeight - targetHeight)); // Clamp to bounds
-            }
-            ctx.drawImage(videoOrProcessedFrame, 0, finalYOffset, targetWidth, targetHeight);
-            ```
-        *   This ensures the offset is applied if provided by the user and the meme is not using the dynamic cropped layout (where `isCropped` would be true). The `!isGreenscreen` check was previously part of this condition but was removed to allow offset for greenscreen videos as well.
+2.  **Backend API Route Modifications (`src/app/api/ai/chat/route.ts`):**
+    *   **Update Request Body Schema (Zod):** Add the new model's user-facing identifier to the `model` enum in the `RequestBodySchema`. This ensures that requests from the frontend with this new model ID pass validation.
+        ```typescript
+        const RequestBodySchema = z.object({
+          model: z.enum([
+            'openai-4.1',
+            'openai-4o',
+            'anthropic-3.5',
+            'claude-sonnet-4-20250514',
+            'new-model-id', // <-- Add new model ID to Zod enum
+            'google-gemini-2.5-pro',
+            'grok-3-latest'
+          ]),
+          // ... rest of schema ...
+        });
+        ```
+    *   **Update Provider Configuration Map:** Add a new entry to the `providers` constant. This is a critical step and requires the **actual model identifier expected by the Vercel AI SDK / specific AI provider**, which might be different from the user-facing ID used above.
+        ```typescript
+        const providers = {
+          // ... existing provider configurations ...
+          'new-model-id': { // <-- Key is the user-facing ID from frontend/schema
+            init: createProviderFunction, // e.g., createOpenAI, createAnthropic
+            model: 'actual-provider-model-name', // <-- CRITICAL: Specific model name for the SDK
+            apiKeyEnv: 'PROVIDER_API_KEY_ENV_VAR', // Environment variable for the API key
+          },
+          // ... other existing provider configurations ...
+        };
+        ```
+        *   `init`: The function from the Vercel AI SDK used to initialize the provider (e.g., `createOpenAI`, `createAnthropic`, `createGoogleGenerativeAI`).
+        *   `model`: **This is the crucial part.** It must be the exact model string that the respective AI provider's SDK expects (e.g., `gpt-4o`, `claude-3-5-sonnet-20240620`, `gemini-pro`). This might not be the same as the user-facing identifier.
+        *   `apiKeyEnv`: The name of the environment variable that stores the API key for this provider.
 
-4.  **Greenscreen Handling:**
-    *   If `isGreenscreenMode` is true, a background image can be selected.
-    *   The video has its green background keyed out, and the processed video frame is composited over the chosen background image.
-    *   The `videoVerticalOffset` applies to the position of this keyed-out video layer on the canvas.
+3.  **Special Handling (If Applicable):**
+    *   If the new model provider is not directly supported by a `create<Provider>` function in the Vercel AI SDK (like the `grok-3-latest` example in the current `route.ts`), you will need to implement custom fetch logic to call that provider's API directly. This typically involves setting up the API endpoint, request body, headers (including authorization), and handling the response.
 
-5.  **Cropped Mode Handling (Non-Greenscreen):**
-    *   If `isCropped` is true (typically for non-greenscreen videos where the canvas height adjusts to fit the caption and video tightly):
-        *   The `videoVerticalOffset` slider is disabled in the UI.
-        *   The `videoVerticalOffset` value passed to the drawing functions is `undefined`.
-        *   The video's vertical position is determined by fixed padding rules relative to the caption text, not by the `videoVerticalOffset`.
+**Key Consideration for Future Model Additions:**
 
-6.  **Other Features:**
-    *   Text overlay with customizable settings.
-    *   Label overlays (for non-cropped modes).
-    *   Watermark functionality.
-    *   Download of the generated meme as an MP4 video.
+The most common point of failure or confusion when adding a new model is the distinction between:
+
+*   **User-Facing/Schema ID:** The identifier used in `MemeSelectorV2.tsx`'s `models` array and in the `RequestBodySchema` in `chat/route.ts`. This can be a more user-friendly or abstracted name (e.g., `anthropic-3.7`).
+*   **Actual Provider SDK Model ID:** The specific model string required by the Vercel AI SDK in the `providers` map's `model` field within `chat/route.ts` (e.g., `claude-3-7-sonnet-20250219`).
+
+**Ensure that the `model` property in the `providers` object in `src/app/api/ai/chat/route.ts` uses the precise identifier recognized by the AI provider's API or the Vercel AI SDK wrapper for that provider.** An incorrect SDK model ID will lead to errors when the backend tries to invoke the model, even if the frontend and schema validation pass.

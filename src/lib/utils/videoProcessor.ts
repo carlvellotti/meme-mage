@@ -256,130 +256,12 @@ export async function createMemeVideo(
         }
       }
 
-      // Draw caption
+      // Draw caption, labels, and watermark
       if (caption) {
-        if (isCropped) {
-          // In cropped mode, caption is positioned at fixed 30px from the top
-          const fontSize = textSettings?.size || 78;
-          const font = textSettings?.font || 'Impact';
-          const strokeWeight = textSettings?.strokeWeight || 0.08;
-          const color = textSettings?.color || 'white';
-          const alignment = textSettings?.alignment || 'center';
-          const lineHeight = fontSize * 1.1; // Line height for consistency
-          
-          // Set caption properties - match preview generator (no "bold")
-          ctx.font = `${fontSize}px ${font}`;
-          ctx.textBaseline = 'top';
-          
-          // Set text alignment
-          if (alignment === 'left') ctx.textAlign = 'left';
-          else if (alignment === 'right') ctx.textAlign = 'right';
-          else ctx.textAlign = 'center';
-          
-          // Calculate position (same calculation as preview generator)
-          const x = alignment === 'left' ? 40 : (alignment === 'right' ? canvas.width - 40 : canvas.width / 2);
-          const y = 30; // 30px from top in cropped mode
-          
-          // Handle text wrapping
-          const maxWidth = canvas.width - 80;
-          const lines = wrapText(ctx, caption, maxWidth);
-          
-          // Draw each line
-          lines.forEach((line, index) => {
-            const lineY = y + (index * lineHeight);
-            
-            // Draw text stroke
-            ctx.lineWidth = fontSize * strokeWeight;
-            ctx.strokeStyle = color === 'white' ? 'black' : 'white';
-            ctx.strokeText(line, x, lineY);
-            
-            // Draw text fill
-            ctx.fillStyle = color;
-            ctx.fillText(line, x, lineY);
-          });
-        } else {
-          // Standard caption drawing for non-cropped mode
-          drawCaption(ctx, caption, canvas.width, canvas.height, textSettings);
-        }
+        drawCaption(ctx, caption, canvas.width, canvas.height, textSettings, isCropped);
       }
-      
-      // Draw labels only in non-cropped mode
-      if (labels?.length && !isCropped) {
+      if (labels && labels.length > 0) {
         drawLabels(ctx, labels, canvas.width, canvas.height, labelSettings);
-      }
-      // Handle labels in cropped mode
-      else if (labels?.length && isCropped) {
-        // Filter and translate labels for cropped mode
-        labels.forEach(label => {
-          if (!label.text.trim()) return;
-          
-          // Calculate original position in full canvas 
-          const originalX = (label.horizontalPosition / 100) * standardWidth;
-          const originalY = (label.verticalPosition / 100) * standardHeight;
-          
-          // Only display labels that were originally within the video area
-          if (originalY >= yOffset && originalY <= (yOffset + targetHeight)) {
-            // Calculate position relative to video
-            const relativeY = originalY - yOffset;
-            
-            // Since we can't access the variables directly, recalculate them
-            const cropTextTop = 30; // Same as defined earlier
-            
-            // Estimate text height based on caption
-            const captionFontSize = textSettings?.size || 78;
-            const captionLineHeight = captionFontSize * 1.1;
-            const captionLines = wrapText(ctx, caption, canvas.width - 80);
-            const captionTextHeight = captionLines.length * captionLineHeight;
-            
-            // Video starts at: top padding + caption height + gap
-            const videoY = cropTextTop + captionTextHeight + 15;
-            
-            // Translate to new position
-            const newY = videoY + relativeY;
-            
-            // Draw label at translated position
-            // Use custom font and size for label
-            const fontSize = label.size;
-            ctx.font = `${fontSize}px ${label.font}`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-  
-            // Calculate approximate label width
-            const metrics = ctx.measureText(label.text);
-            const textWidth = metrics.width;
-            
-            // Get background settings from labelSettings, with defaults
-            const bgColor = labelSettings?.backgroundColor || 'black';
-            const bgOpacity = labelSettings?.backgroundOpacity !== undefined ? labelSettings.backgroundOpacity : 0.5;
-            
-            // Draw a background rectangle if not transparent
-            if (bgColor !== 'transparent') {
-              const padding = 10;
-              // Set background color and opacity
-              if (bgColor === 'black') {
-                ctx.fillStyle = `rgba(0, 0, 0, ${bgOpacity})`;
-              } else if (bgColor === 'white') {
-                ctx.fillStyle = `rgba(255, 255, 255, ${bgOpacity})`;
-              }
-              
-              ctx.fillRect(
-                originalX - textWidth / 2 - padding,
-                newY - fontSize / 2 - padding / 2,
-                textWidth + padding * 2,
-                fontSize + padding
-              );
-            }
-  
-            // Set stroke and draw text
-            ctx.lineWidth = fontSize * (labelSettings?.strokeWeight || 0.08);
-            ctx.strokeStyle = labelSettings?.color === 'black' ? 'white' : 'black';
-            ctx.strokeText(label.text, originalX, newY);
-            
-            // Fill text
-            ctx.fillStyle = labelSettings?.color === 'black' ? 'black' : 'white';
-            ctx.fillText(label.text, originalX, newY);
-          }
-        });
       }
 
       // <<< Draw Watermark >>>
@@ -639,48 +521,89 @@ function drawCaption(
   caption: string, 
   canvasWidth: number, 
   canvasHeight: number,
-  textSettings?: TextSettings
+  textSettings?: TextSettings,
+  isCropped?: boolean
 ) {
-  const fontSize = textSettings ? textSettings.size : Math.floor(canvasWidth * 0.078);
-  ctx.font = `${fontSize}px ${textSettings?.font || 'Impact'}`;
-  ctx.textAlign = textSettings?.alignment || 'center';
-  ctx.textBaseline = 'bottom';
+  if (!caption) return;
+
+  const font = textSettings?.font || 'Impact';
+  const size = textSettings?.size || 78;
+  const color = textSettings?.color || 'white';
+  const strokeWeight = textSettings?.strokeWeight || 0.08;
+  const verticalPosition = textSettings?.verticalPosition || 25;
+  const alignment = textSettings?.alignment || 'center';
+  // NEW: Get text background settings
+  const textBgColor = textSettings?.backgroundColor || 'transparent';
+  const textBgOpacity = textSettings?.backgroundOpacity === undefined ? 0.5 : textSettings.backgroundOpacity;
+
+  ctx.font = `${size}px ${font}`;
+  ctx.textAlign = alignment as CanvasTextAlign;
   
   const maxWidth = canvasWidth - 80;
   const lines = wrapText(ctx, caption, maxWidth);
-  const lineHeight = fontSize * 1.1;
+  const lineHeight = size * 1.1;
 
-  // Calculate vertical position
-  const textY = canvasHeight * (textSettings?.verticalPosition || 25) / 100;
+  let y;
+  if (isCropped) {
+    ctx.textBaseline = 'top';
+    y = 30; // Fixed position 30px from top of cropped canvas
+  } else {
+    ctx.textBaseline = 'bottom';
+    y = (canvasHeight * verticalPosition) / 100;
+  }
 
-  // Use same x position calculation as preview generator
-  const x = textSettings?.alignment === 'left' 
-    ? 40
-    : textSettings?.alignment === 'right' 
-      ? canvasWidth - 40 
-      : canvasWidth / 2;
-
-  // Get text color and stroke weight from settings or use defaults
-  const textColor = textSettings?.color || 'white';
-  const strokeWeight = textSettings?.strokeWeight !== undefined 
-    ? fontSize * textSettings.strokeWeight 
-    : fontSize * 0.08;
-
-  // Calculate the total height of all text lines
-  const totalTextHeight = (lines.length - 1) * lineHeight;
-
-  // Draw each line of text, positioning the BOTTOM of the LAST line at the specified vertical position
   lines.forEach((line, index) => {
-    // Adjust position so the BOTTOM of the LAST line is at the specified vertical position
-    const y = textY - (lines.length - 1 - index) * lineHeight;
+    let currentLineY;
+    if (isCropped) {
+      currentLineY = y + (index * lineHeight);
+    } else {
+      // Simplified Y calculation to match preview generator
+      // Adjust position so the BOTTOM of the LAST line is at the specified vertical position
+      currentLineY = y - (lines.length - 1 - index) * lineHeight;
+    }
+
+    const textMetrics = ctx.measureText(line);
+    const textWidth = textMetrics.width;
+    const actualTextHeight = textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent;
+    const bgPadding = size * 0.1; // Padding for the background
+
+    let x;
+    if (alignment === 'left') x = 40;
+    else if (alignment === 'right') x = canvasWidth - 40;
+    else x = canvasWidth / 2; // Center
+
+    // NEW: Draw text background
+    if (textBgColor && textBgColor !== 'none' && textBgColor !== 'transparent' && textBgOpacity > 0) {
+      ctx.globalAlpha = textBgOpacity;
+      ctx.fillStyle = textBgColor;
+      let bgX = x;
+      if (alignment === 'center') {
+        bgX = x - textWidth / 2;
+      } else if (alignment === 'right') {
+        bgX = x - textWidth;
+      }
+      
+      let bgY;
+      if (isCropped) {
+        // textBaseline is 'top', so currentLineY is the top
+        bgY = currentLineY - bgPadding;
+      } else {
+        // textBaseline is 'bottom', so calculate top of text
+        bgY = (currentLineY - textMetrics.actualBoundingBoxAscent) - bgPadding;
+      }
+
+      ctx.fillRect(bgX - bgPadding, bgY, textWidth + (bgPadding * 2), actualTextHeight + (bgPadding * 2));
+      ctx.globalAlpha = 1; // Reset globalAlpha
+    }
+
+    // Draw text stroke - FIX: multiply strokeWeight by font size
+    ctx.lineWidth = size * strokeWeight;
+    ctx.strokeStyle = color === 'white' ? '#000000' : '#FFFFFF';
+    ctx.strokeText(line, x, currentLineY);
     
-    // Set stroke color to be opposite of text color for better visibility
-    ctx.strokeStyle = textColor === 'white' ? '#000000' : '#FFFFFF';
-    ctx.lineWidth = strokeWeight;
-    ctx.strokeText(line, x, y);
-    
-    ctx.fillStyle = textColor === 'white' ? '#FFFFFF' : '#000000';
-    ctx.fillText(line, x, y);
+    // Draw text fill
+    ctx.fillStyle = color;
+    ctx.fillText(line, x, currentLineY);
   });
 }
 

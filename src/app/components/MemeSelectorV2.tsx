@@ -91,8 +91,9 @@ const getModelDisplayName = (modelId: string) => {
   switch (modelId) {
     case "anthropic-3.5":
       return "Claude 3.5";
-    case "anthropic-3.7":
-      return "Claude 3.7";
+    // case "anthropic-3.7": // Commented out
+    case "claude-sonnet-4-20250514":
+      return "Claude Sonnet 4";
     case "google-gemini-2.5-pro":
       return "Gemini 2.5";
     case "grok-3-latest":
@@ -108,7 +109,7 @@ export default function MemeSelectorV2() {
   const [selectedRuleSetId, setSelectedRuleSetId] = useState<string>(''); // Store selected rule set ID ('' for default)
   const [selectedRuleSetId2, setSelectedRuleSetId2] = useState<string>(''); // Store selected second rule set ID ('' for none)
   const [selectedCategory, setSelectedCategory] = useState<string>(''); // <-- New state for category
-  const [temperatureApi1, setTemperatureApi1] = useState<number>(0.7); // <-- New state for API1 temperature
+  const [temperatureApi1, setTemperatureApi1] = useState<number>(0.1); // <-- DEFAULT CHANGED TO 0.1
   const [userPrompt, setUserPrompt] = useState<string>(''); // Optional prompt
   const [isGreenscreenMode, setIsGreenscreenMode] = useState<boolean>(false); // Greenscreen mode state
   const [isLoadingTemplates, setIsLoadingTemplates] = useState<boolean>(false);
@@ -295,7 +296,8 @@ export default function MemeSelectorV2() {
 
     const models = [
       'anthropic-3.5',
-      'anthropic-3.7',
+      // 'anthropic-3.7', // Commented out
+      'claude-sonnet-4-20250514',
       // 'google-gemini-2.5-pro', // Commented out as requested
       // 'grok-3-latest' // Commented out as requested
     ];
@@ -659,7 +661,7 @@ export default function MemeSelectorV2() {
      setUserPrompt('');
      setSelectedRuleSetId2(''); // Reset second rule set selection
      setSelectedCategory(''); // <-- Reset category selection
-     setTemperatureApi1(0.7); // <-- Reset API1 temperature to default
+     setTemperatureApi1(0.1); // <-- RESET CHANGED TO 0.1
      setIsGreenscreenMode(false); // Reset greenscreen mode
      setSelectedFinalTemplate(null);
      setSelectedFinalCaption(null);
