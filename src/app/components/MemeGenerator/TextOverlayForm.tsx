@@ -31,7 +31,7 @@ const TextOverlayForm: React.FC<TextOverlayFormProps> = ({
         />
       </div>
 
-      <details className="mt-2">
+      <details className="mt-2" open>
         <summary className="cursor-pointer text-sm text-gray-300 hover:text-white">
           Caption Settings
         </summary>
@@ -178,6 +178,72 @@ const TextOverlayForm: React.FC<TextOverlayFormProps> = ({
                 className="flex-1"
               />
               <span className="text-sm text-gray-300 w-12">{Math.round(textSettings.strokeWeight * 100)}%</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-300 mb-1">Background Color</label>
+            <div className="flex gap-0 border border-gray-700 rounded-md overflow-hidden">
+              <button
+                onClick={() => onTextSettingChange('backgroundColor', 'black')}
+                className={`flex-1 p-2 text-sm font-bold text-white bg-black flex items-center justify-center gap-1
+                  ${textSettings.backgroundColor === 'black' 
+                    ? 'ring-2 ring-inset ring-blue-500' 
+                    : 'hover:bg-opacity-90'
+                  }`}
+              >
+                {textSettings.backgroundColor === 'black' && (
+                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                Black
+              </button>
+              <div className="w-px bg-gray-600" />
+              <button
+                onClick={() => onTextSettingChange('backgroundColor', 'white')}
+                className={`flex-1 p-2 text-sm font-bold text-black bg-white flex items-center justify-center gap-1
+                  ${textSettings.backgroundColor === 'white' 
+                    ? 'ring-2 ring-inset ring-blue-500' 
+                    : 'hover:bg-gray-50'
+                  }`}
+              >
+                {textSettings.backgroundColor === 'white' && (
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                White
+              </button>
+              <div className="w-px bg-gray-600" />
+              <button
+                onClick={() => onTextSettingChange('backgroundColor', 'none')}
+                className={`flex-1 p-2 text-sm
+                  ${textSettings.backgroundColor === 'none' 
+                    ? 'bg-blue-900 text-blue-300' 
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+              >
+                None
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-300 mb-1">Background Opacity</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={Math.round((textSettings.backgroundOpacity ?? 0.5) * 100)}
+                onChange={(e) => onTextSettingChange('backgroundOpacity', parseInt(e.target.value) / 100)}
+                className="flex-1"
+                disabled={textSettings.backgroundColor === 'none'}
+              />
+              <span className="text-sm text-gray-300 w-12">
+                {textSettings.backgroundColor === 'none' ? 'N/A' : `${Math.round((textSettings.backgroundOpacity ?? 0.5) * 100)}%`}
+              </span>
             </div>
           </div>
         </div>

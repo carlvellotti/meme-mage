@@ -40,6 +40,8 @@ export interface TextSettings {
   alignment: 'left' | 'center' | 'right';
   color: 'white' | 'black';
   strokeWeight: number;
+  backgroundColor?: 'black' | 'white' | 'none';
+  backgroundOpacity?: number;
 }
 
 export interface SelectedMeme {

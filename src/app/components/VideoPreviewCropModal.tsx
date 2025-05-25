@@ -147,34 +147,30 @@ const VideoPreviewCropModal: React.FC<VideoPreviewCropModalProps> = ({
      console.log("Preview image loaded, natural dims:", imageElement.naturalWidth, imageElement.naturalHeight);
      
      // If we are in cropping mode and the crop hasn't been set yet (or needs reset),
-     // set the initial crop to cover the full image.
+     // set the initial crop to cover the full image using percentage units.
      if (isCropping) { // Check if we are in cropping mode
-       // Ensure dimensions are valid before setting
+       // Ensure dimensions are valid before setting (though not strictly necessary for %)
        if (imageElement.naturalWidth > 0 && imageElement.naturalHeight > 0) {
-           console.log("onImageLoad: Setting initial crop.");
+           console.log("onImageLoad: Setting initial crop to 100% using percentage units.");
            setCrop({
-              unit: 'px',
+              unit: '%',
               x: 0,
               y: 0,
-              width: imageElement.naturalWidth,
-              height: imageElement.naturalHeight,
+              width: 100,
+              height: 100,
           });
        } else {
-           console.warn("onImageLoad: Image loaded but natural dimensions are zero.");
+           console.warn("onImageLoad: Image loaded but natural dimensions are zero (still attempting % crop).");
+           // Still attempt to set a 100% crop even if natural dims are 0, as % might work
+           setCrop({
+              unit: '%',
+              x: 0,
+              y: 0,
+              width: 100,
+              height: 100,
+          });
        }
      }
-     // The code below was commented out previously, keep it that way or remove if not needed
-     // // If we are already in cropping mode when image loads, reset crop
-     // // This covers edge cases where frame capture finishes after mode starts
-     // if (isCropping && e.currentTarget) {
-     //   setCrop({
-     //       unit: 'px',
-     //       x: 0,
-     //       y: 0,
-     //       width: e.currentTarget.naturalWidth,
-     //       height: e.currentTarget.naturalHeight,
-     //   });
-     // }
   }
 
   const handleCancelCrop = () => {
@@ -187,45 +183,72 @@ const VideoPreviewCropModal: React.FC<VideoPreviewCropModalProps> = ({
 
   const handleSaveCrop = async () => {
     console.log('Save Crop clicked');
-    if (!template || !videoDimensions || !crop || !imgRef.current) {
+    // Ensure template, crop object, and imgRef are available.
+    // videoDimensions will be checked before being used for scaling.
+    if (!template || !crop || !imgRef.current ) {
         toast.error("Cannot save crop - missing necessary data or crop selection.");
         return;
     }
-    // Validate crop dimensions
-    if (!crop.width || !crop.height || crop.width < 1 || crop.height < 1) {
+    // Validate raw crop values from state - these are pixels from react-image-crop relative to displayed image.
+    if (crop.width === undefined || crop.height === undefined || crop.width < 0 || crop.height < 0 ) {
         toast.error("Invalid crop selection. Please select an area.");
+        return;
+    }
+    // Further check: if width or height is 0, it's not a valid crop unless it's the initial un-interacted state.
+    // However, user must interact to enable save, so 0 width/height here is an issue.
+    if (crop.width === 0 || crop.height === 0) {
+        toast.error("Crop selection width or height is zero. Please select a valid area.");
         return;
     }
 
     setIsProcessing(true);
 
-    // --- Coordinate Translation ---
-    // react-image-crop now gives pixel values based on the natural image size.
-    // The captured frame's natural size SHOULD match the video's natural size.
-    // Therefore, no scaling is needed.
+    // Ensure videoDimensions (natural video size) and imgRef.current (for displayed image size) are available.
+    if (!videoDimensions || !imgRef.current.width || !imgRef.current.height) {
+        toast.error("Cannot save crop - video or image dimensions are not available for scaling.");
+        setIsProcessing(false);
+        return;
+    }
+
+    console.log('Crop state from react-image-crop (pixels relative to displayed image):', JSON.parse(JSON.stringify(crop)));
+    console.log('Natural video dimensions:', videoDimensions);
+    console.log('Displayed image dimensions (imgRef.current):', { w: imgRef.current.width, h: imgRef.current.height });
+
+    // Calculate scaling factors.
+    const scaleX = videoDimensions.width / imgRef.current.width;
+    const scaleY = videoDimensions.height / imgRef.current.height;
+    console.log('Scaling factors:', { scaleX, scaleY });
+
+    // Convert crop coordinates from displayed image pixels to natural video pixels.
+    const naturalPixelX = crop.x * scaleX;
+    const naturalPixelY = crop.y * scaleY;
+    const naturalPixelWidth = crop.width * scaleX;
+    const naturalPixelHeight = crop.height * scaleY;
+
     const finalCrop = {
-      x: Math.round(crop.x),
-      y: Math.round(crop.y),
-      width: Math.round(crop.width),
-      height: Math.round(crop.height),
+      x: Math.round(naturalPixelX),
+      y: Math.round(naturalPixelY),
+      width: Math.round(naturalPixelWidth),
+      height: Math.round(naturalPixelHeight),
     };
 
-    console.log('Original crop (px): ', crop);
-    console.log('Video dimensions: ', videoDimensions);
-    // console.log('Image natural dims: ', { w: imageElement.naturalWidth, h: imageElement.naturalHeight});
-    // console.log('Calculated scales: ', { scaleX, scaleY });
-    console.log('Final crop payload for API (pixels, no scaling): ', finalCrop);
+    console.log('Final crop payload for API (pixels relative to natural video):', finalCrop);
 
-    // Sanity check the final coordinates (using videoDimensions as the source of truth)
-    if (finalCrop.x < 0 || finalCrop.y < 0 || finalCrop.width <= 0 || finalCrop.height <= 0 ||
-        finalCrop.x + finalCrop.width > videoDimensions.width + 1 || // Add tolerance
-        finalCrop.y + finalCrop.height > videoDimensions.height + 1) {
-      console.error("Crop coordinates are invalid or out of bounds: ", finalCrop, "against video dims:", videoDimensions);
-      toast.error("Crop selection is invalid or out of bounds.");
+    // Sanity check the final natural pixel coordinates.
+    if (finalCrop.width <= 0 || finalCrop.height <= 0) {
+        toast.error("Calculated crop width or height for API is zero or negative.");
+        setIsProcessing(false);
+        return;
+    }
+    // Check against natural video dimensions.
+    if (finalCrop.x < -1 || finalCrop.y < -1 || // Allow for small rounding errors, e.g. -0.5 rounds to 0
+        finalCrop.x + finalCrop.width > videoDimensions.width + 1.5 || 
+        finalCrop.y + finalCrop.height > videoDimensions.height + 1.5) {
+      console.error("Final crop coordinates for API are invalid or out of bounds: ", finalCrop, "against natural video dims:", videoDimensions);
+      toast.error("Crop selection is invalid or out of bounds after scaling to natural video size.");
       setIsProcessing(false);
       return;
     }
-
 
     try {
       // --- API Call ---

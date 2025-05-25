@@ -84,6 +84,8 @@ export default function MemeGenerator({
     alignment: 'center',
     color: 'white',
     strokeWeight: 0.08,
+    backgroundColor: 'none',
+    backgroundOpacity: 0.5,
   });
   const [{ labels, labelSettings }, dispatchLabelsAction] = useLabels();
   const [backgroundSearch, setBackgroundSearch] = useState('');
@@ -109,6 +111,16 @@ export default function MemeGenerator({
     backgroundOpacity: 0.5,
   });
 
+  // Update initial TextSettings state to include new properties
+  useEffect(() => {
+    setTextSettings(prev => ({
+      ...prev,
+      verticalPosition: isGreenscreenMode ? 25 : prev.verticalPosition || 25,
+      backgroundColor: prev.backgroundColor || 'none', // Default to 'none'
+      backgroundOpacity: prev.backgroundOpacity || 0.5, // Default to 0.5
+    }));
+  }, [isGreenscreenMode]);
+
   const hasCalculatedPositionRef = useRef<string | null>(null);
 
   const createPreviewParams = useCallback((): GeneratePreviewParams | null => {
@@ -124,7 +136,7 @@ export default function MemeGenerator({
       isCropped,
       isWatermarkEnabled,
       watermarkSettings,
-      videoVerticalOffset: (isGreenscreenMode || isCropped) ? undefined : videoVerticalOffset,
+      videoVerticalOffset: isCropped ? undefined : videoVerticalOffset,
     };
   }, [selectedTemplate, caption, selectedBackground, isGreenscreenMode, textSettings, labels, labelSettings, isCropped, isWatermarkEnabled, watermarkSettings, videoVerticalOffset]);
 
@@ -369,53 +381,53 @@ export default function MemeGenerator({
             <div className="flex flex-col lg:flex-row gap-8">
               <div className="w-full lg:w-1/2 space-y-4">
                 <h2 className="text-lg font-medium mb-2 text-white">Editor</h2>
-              <TextOverlayForm caption={caption} onCaptionChange={setCaption} textSettings={textSettings} onTextSettingChange={updateTextSetting} isCropped={isCropped} />
-              { !isGreenscreenMode && !isCropped && (
-                <div className="space-y-2">
-                  <label htmlFor="videoVerticalOffset" className="block text-sm font-medium text-gray-300">
-                    Video Vertical Offset: {videoVerticalOffset}%
-                  </label>
-                  <input
-                    type="range"
-                    id="videoVerticalOffset"
-                    name="videoVerticalOffset"
-                    min="0"
-                    max="100"
-                    value={videoVerticalOffset}
-                    onChange={(e) => setVideoVerticalOffset(Number(e.target.value))}
-                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                    disabled={isGreenscreenMode || isCropped}
-                  />
-                </div>
-              )}
-              <LabelControls labels={labels} labelSettings={labelSettings} dispatch={dispatchLabelsAction} />
-              <WatermarkControls isWatermarkEnabled={isWatermarkEnabled} onToggleWatermark={setIsWatermarkEnabled} watermarkSettings={watermarkSettings} onWatermarkSettingChange={updateWatermarkSetting} />
-              <ImageUpload selectedTemplate={selectedTemplate} isGreenscreenMode={isGreenscreenMode} previewVideoRef={previewVideoRef} selectedBackground={selectedBackground} onClearBackground={() => setSelectedBackground(null)} onOpenImagePicker={() => setIsUnsplashPickerOpen(true)} />
-                {personaId && selectedTemplate && (
-                <FeedbackButtons onFeedback={handleFeedback} isLoading={isFeedbackLoading} currentStatus={feedbackStatus} />
+                <TextOverlayForm caption={caption} onCaptionChange={setCaption} textSettings={textSettings} onTextSettingChange={updateTextSetting} isCropped={isCropped} />
+                { !isCropped && (
+                  <div className="space-y-2">
+                    <label htmlFor="videoVerticalOffset" className="block text-sm font-medium text-gray-300">
+                      Video Vertical Offset: {videoVerticalOffset}%
+                    </label>
+                    <input
+                      type="range"
+                      id="videoVerticalOffset"
+                      name="videoVerticalOffset"
+                      min="0"
+                      max="100"
+                      value={videoVerticalOffset}
+                      onChange={(e) => setVideoVerticalOffset(Number(e.target.value))}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      disabled={isCropped}
+                    />
+                  </div>
                 )}
-              </div>
-              <div className="w-full lg:w-1/2">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-lg font-medium">Preview</h2>
-                  {!isGreenscreenMode && selectedTemplate && (
-                  <CropToggle isCropped={isCropped} onToggleCrop={toggleCrop} disabled={isGreenscreenMode} />
+                <LabelControls labels={labels} labelSettings={labelSettings} dispatch={dispatchLabelsAction} />
+                <WatermarkControls isWatermarkEnabled={isWatermarkEnabled} onToggleWatermark={setIsWatermarkEnabled} watermarkSettings={watermarkSettings} onWatermarkSettingChange={updateWatermarkSetting} />
+                <ImageUpload selectedTemplate={selectedTemplate} isGreenscreenMode={isGreenscreenMode} previewVideoRef={previewVideoRef} selectedBackground={selectedBackground} onClearBackground={() => setSelectedBackground(null)} onOpenImagePicker={() => setIsUnsplashPickerOpen(true)} />
+                  {personaId && selectedTemplate && (
+                  <FeedbackButtons onFeedback={handleFeedback} isLoading={isFeedbackLoading} currentStatus={feedbackStatus} />
                   )}
                 </div>
-                <div className="lg:sticky lg:top-4 relative z-10">
-                <MemeCanvas previewCanvas={currentPreview} isCropped={isCropped} />
+                <div className="w-full lg:w-1/2">
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-lg font-medium">Preview</h2>
+                    {!isGreenscreenMode && selectedTemplate && (
+                    <CropToggle isCropped={isCropped} onToggleCrop={toggleCrop} disabled={isGreenscreenMode} />
+                    )}
+                  </div>
+                  <div className="lg:sticky lg:top-4 relative z-10">
+                  <MemeCanvas previewCanvas={currentPreview} isCropped={isCropped} />
+                        </div>
+                  {selectedBackground && typeof selectedBackground === 'object' && selectedBackground.attribution && (
+                    <>
+                      <div className="text-xs text-gray-500 mt-1.5 relative z-0">
+                      Background by{' '}<a href={selectedBackground.attribution?.photographerUrl || `https://unsplash.com/photos/${selectedBackground.id}?utm_source=meme_mage&utm_medium=referral`} target="_blank" rel="noopener noreferrer" className="text-gray-500 underline">{selectedBackground.name.replace('Unsplash photo by ', '')}</a>{' '}on{' '}<a href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral&utm_campaign=api-credit" target="_blank" rel="noopener noreferrer" className="text-gray-500 underline">Unsplash</a>
                       </div>
-                {selectedBackground && typeof selectedBackground === 'object' && selectedBackground.attribution && (
-                  <>
-                    <div className="text-xs text-gray-500 mt-1.5 relative z-0">
-                    Background by{' '}<a href={selectedBackground.attribution?.photographerUrl || `https://unsplash.com/photos/${selectedBackground.id}?utm_source=meme_mage&utm_medium=referral`} target="_blank" rel="noopener noreferrer" className="text-gray-500 underline">{selectedBackground.name.replace('Unsplash photo by ', '')}</a>{' '}on{' '}<a href="https://unsplash.com/?utm_source=meme_mage&utm_medium=referral&utm_campaign=api-credit" target="_blank" rel="noopener noreferrer" className="text-gray-500 underline">Unsplash</a>
-                    </div>
-                    <div className="mt-3 mb-2 relative z-0">
-                      <p className="text-xs text-gray-600 mb-1 font-medium">You must credit the photographer when sharing:</p>
-                      <div className="relative">
-                      <input type="text" value={`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution && 'instagram_username' in selectedBackground.attribution && selectedBackground.attribution.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`} readOnly className="text-xs px-3 py-2 border rounded w-full pr-10 bg-gray-700" />
-                      <button onClick={() => { navigator.clipboard.writeText(`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution && 'instagram_username' in selectedBackground.attribution && selectedBackground.attribution.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`); toast.success('Attribution copied to clipboard'); }} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1.5">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                      <div className="mt-3 mb-2 relative z-0">
+                        <p className="text-xs text-gray-600 mb-1 font-medium">You must credit the photographer when sharing:</p>
+                        <div className="relative">
+                        <input type="text" value={`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution && 'instagram_username' in selectedBackground.attribution && selectedBackground.attribution.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`} readOnly className="text-xs px-3 py-2 border rounded w-full pr-10 bg-gray-700" />
+                        <button onClick={() => { navigator.clipboard.writeText(`Photo by ${selectedBackground.name.replace('Unsplash photo by ', '')} on Unsplash${selectedBackground.attribution && 'instagram_username' in selectedBackground.attribution && selectedBackground.attribution.instagram_username ? `. Instagram: @${selectedBackground.attribution.instagram_username}` : `. Unsplash: @${selectedBackground.attribution?.username || ''}`}`); toast.success('Attribution copied to clipboard'); }} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1.5">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
                         </button>
                       </div>
                     </div>

@@ -18,7 +18,8 @@ const RequestBodySchema = z.object({
     'openai-4.1',
     'openai-4o',
     'anthropic-3.5',
-    'anthropic-3.7',
+    // 'anthropic-3.7', // Commented out
+    'claude-sonnet-4-20250514',
     'google-gemini-2.5-pro',
     'grok-3-latest'
   ]),
@@ -53,9 +54,14 @@ const providers = {
     model: 'claude-3-5-sonnet-20241022',
     apiKeyEnv: 'ANTHROPIC_API_KEY',
   },
-  'anthropic-3.7': {
+  // 'anthropic-3.7': { // Commented out
+  //   init: createAnthropic,
+  //   model: 'claude-3-7-sonnet-20250219',
+  //   apiKeyEnv: 'ANTHROPIC_API_KEY',
+  // },
+  'claude-sonnet-4-20250514': {
     init: createAnthropic,
-    model: 'claude-3-7-sonnet-20250219',
+    model: 'claude-4-sonnet-20250514',
     apiKeyEnv: 'ANTHROPIC_API_KEY',
   },
   'google-gemini-2.5-pro': {

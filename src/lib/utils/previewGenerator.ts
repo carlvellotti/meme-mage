@@ -159,9 +159,36 @@ export async function createMemePreview(
           // Configure text style
           ctx.font = `${fontSize}px ${font}`;
           
+          // NEW: Get text background settings
+          const textBgColor = textSettings?.backgroundColor || 'transparent';
+          const textBgOpacity = textSettings?.backgroundOpacity === undefined ? 0.5 : textSettings.backgroundOpacity;
+
           // Draw each line of text with stroke and fill
           lines.forEach((line, index) => {
             const lineY = y + (index * lineHeight);
+            const textMetrics = ctx.measureText(line);
+            const textWidth = textMetrics.width;
+            // Note: Actual ascent/descent might be more accurate but this is a common approximation
+            const actualTextHeight = textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent;
+            const bgPadding = fontSize * 0.1;
+
+            // NEW: Draw text background if color is not 'none' or 'transparent'
+            if (textBgColor && textBgColor !== 'none' && textBgColor !== 'transparent' && textBgOpacity > 0) {
+              ctx.globalAlpha = textBgOpacity;
+              ctx.fillStyle = textBgColor;
+              let bgX = x;
+              if (alignment === 'center') {
+                bgX = x - textWidth / 2;
+              } else if (alignment === 'right') {
+                bgX = x - textWidth;
+              }
+              // Added some padding to the background
+              // const padding = fontSize * 0.1; 
+              // ctx.fillRect(bgX - padding, lineY - padding, textWidth + (padding * 2), textHeight + (padding * 2));
+              const bgY = lineY - bgPadding; // Since textBaseline is 'top', lineY is the top
+              ctx.fillRect(bgX - bgPadding, bgY, textWidth + (bgPadding * 2), actualTextHeight + (bgPadding * 2));
+              ctx.globalAlpha = 1; // Reset globalAlpha
+            }
             
             // Draw text stroke
             ctx.lineWidth = fontSize * strokeWeight;
@@ -260,24 +287,54 @@ export async function createMemePreview(
           
           // Calculate y position based on percentage of canvas height
           // This ensures the BOTTOM of the text is at the specified vertical position
-          const y = (verticalPosition / 100) * canvas.height;
+          const y = (canvas.height * verticalPosition) / 100;
           
           // Configure text style
           ctx.font = `${size}px ${font}`;
           
+          // NEW: Get text background settings for non-cropped mode
+          const textBgColorNonCropped = textSettings?.backgroundColor || 'transparent';
+          const textBgOpacityNonCropped = textSettings?.backgroundOpacity === undefined ? 0.5 : textSettings.backgroundOpacity;
+
           // Handle text wrapping
           const maxWidth = canvas.width - 80;
           const lines = wrapText(ctx, caption, maxWidth);
           
           // Calculate the total height of all text lines to properly position multi-line text
-          const lineHeight = size * 1.1;
-          const totalTextHeight = (lines.length - 1) * lineHeight;
+          const lineHeightNonCropped = size * 1.1;
+          const totalTextHeight = (lines.length - 1) * lineHeightNonCropped;
           
           // Draw each line of text with stroke and fill
           // Adjust position so the BOTTOM of the LAST line is at the specified vertical position
           lines.forEach((line, index) => {
-            const lineY = y - (lines.length - 1 - index) * lineHeight;
+            const lineY = y - (lines.length - 1 - index) * lineHeightNonCropped;
             
+            // NEW: Draw text background for non-cropped mode
+            const textMetrics = ctx.measureText(line);
+            const textWidth = textMetrics.width;
+            // const textHeight = size; // Approximation
+            const actualTextHeight = textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent;
+            const bgPadding = size * 0.1;
+
+            if (textBgColorNonCropped && textBgColorNonCropped !== 'none' && textBgColorNonCropped !== 'transparent' && textBgOpacityNonCropped > 0) {
+              ctx.globalAlpha = textBgOpacityNonCropped;
+              ctx.fillStyle = textBgColorNonCropped;
+              let bgX = x;
+              if (alignment === 'center') {
+                bgX = x - textWidth / 2;
+              } else if (alignment === 'right') {
+                bgX = x - textWidth;
+              }
+               // Added some padding to the background
+              // const padding = size * 0.1;
+              // ctx.fillRect(bgX - padding, lineY - textHeight * 0.8 - padding, textWidth + (padding * 2), textHeight + (padding * 2)); // Adjusted Y for better centering with textBaseline 'bottom'
+              // Since textBaseline is 'bottom', lineY is the baseline.
+              // The visual top of the text is (lineY - textMetrics.actualBoundingBoxAscent)
+              const bgY = (lineY - textMetrics.actualBoundingBoxAscent) - bgPadding;
+              ctx.fillRect(bgX - bgPadding, bgY, textWidth + (bgPadding * 2), actualTextHeight + (bgPadding * 2));
+              ctx.globalAlpha = 1; // Reset globalAlpha
+            }
+
             // Draw text stroke
             ctx.lineWidth = size * strokeWeight;
             ctx.strokeStyle = color === 'white' ? 'black' : 'white';
