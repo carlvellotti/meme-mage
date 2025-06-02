@@ -6,7 +6,7 @@ import { debounce } from '@/lib/utils/debounce';
 
 // Local imports
 import { MemeTemplate } from '@/lib/supabase/types';
-import { BackgroundImage, TextSettings, SelectedMeme } from '@/lib/types/meme';
+import { BackgroundImage, BackgroundVideo, TextSettings, SelectedMeme } from '@/lib/types/meme';
 import { UnsplashImage } from '@/lib/types/unsplash';
 import { createClient } from '@/lib/supabase/client';
 
@@ -24,6 +24,7 @@ import WatermarkControls from './MemeGenerator/WatermarkControls';
 import BackButton from './MemeGenerator/BackButton';
 import FeedbackButtons from './MemeGenerator/FeedbackButtons';
 import CropToggle from './MemeGenerator/CropToggle';
+import BackgroundVideoSelector from './MemeGenerator/BackgroundVideoSelector';
 
 // Import from useLabels hook
 import { useLabels, Label, CommonLabelSettings } from '@/app/lib/hooks/useLabels';
@@ -77,6 +78,9 @@ export default function MemeGenerator({
   const [selectedBackground, setSelectedBackground] = useState<BackgroundImage | null>(null);
   const [backgrounds, setBackgrounds] = useState<BackgroundImage[]>([]);
   const [isLoadingBackgrounds, setIsLoadingBackgrounds] = useState(false);
+  const [selectedBackgroundVideo, setSelectedBackgroundVideo] = useState<BackgroundVideo | null>(null);
+  const [backgroundVideos, setBackgroundVideos] = useState<BackgroundVideo[]>([]);
+  const [isLoadingBackgroundVideos, setIsLoadingBackgroundVideos] = useState(false);
   const [textSettings, setTextSettings] = useState<TextSettings>({
     size: 78,
     font: 'Arial',
@@ -129,6 +133,7 @@ export default function MemeGenerator({
       videoUrl: selectedTemplate.video_url,
       caption,
       backgroundUrl: selectedBackground?.url,
+      backgroundVideoUrl: selectedBackgroundVideo?.video_url,
       isGreenscreenMode,
       textSettings,
       labels,
@@ -138,7 +143,7 @@ export default function MemeGenerator({
       watermarkSettings,
       videoVerticalOffset: isCropped ? undefined : videoVerticalOffset,
     };
-  }, [selectedTemplate, caption, selectedBackground, isGreenscreenMode, textSettings, labels, labelSettings, isCropped, isWatermarkEnabled, watermarkSettings, videoVerticalOffset]);
+  }, [selectedTemplate, caption, selectedBackground, selectedBackgroundVideo, isGreenscreenMode, textSettings, labels, labelSettings, isCropped, isWatermarkEnabled, watermarkSettings, videoVerticalOffset]);
 
   useEffect(() => {
     async function loadBackgrounds() {
@@ -156,6 +161,33 @@ export default function MemeGenerator({
     }
     if (isGreenscreenMode) loadBackgrounds();
   }, [isGreenscreenMode, supabase]);
+
+  // Load background videos for non-greenscreen mode
+  useEffect(() => {
+    loadBackgroundVideos();
+  }, [isGreenscreenMode]);
+
+  const loadBackgroundVideos = async () => {
+    if (isGreenscreenMode) return; // Only for non-greenscreen
+    
+    setIsLoadingBackgroundVideos(true);
+    try {
+      const response = await fetch('/api/background-videos');
+      const data = await response.json();
+      if (data.backgroundVideos) {
+        setBackgroundVideos(data.backgroundVideos);
+      }
+    } catch (error) {
+      console.error('Error loading background videos:', error);
+      toast.error('Failed to load background videos');
+    } finally {
+      setIsLoadingBackgroundVideos(false);
+    }
+  };
+
+  const refreshBackgroundVideos = () => {
+    loadBackgroundVideos();
+  };
 
   // Central useEffect for triggering preview generation
   useEffect(() => {
@@ -402,6 +434,16 @@ export default function MemeGenerator({
                 )}
                 <LabelControls labels={labels} labelSettings={labelSettings} dispatch={dispatchLabelsAction} />
                 <WatermarkControls isWatermarkEnabled={isWatermarkEnabled} onToggleWatermark={setIsWatermarkEnabled} watermarkSettings={watermarkSettings} onWatermarkSettingChange={updateWatermarkSetting} />
+                {!isGreenscreenMode && (
+                  <BackgroundVideoSelector
+                    selectedBackgroundVideo={selectedBackgroundVideo}
+                    backgroundVideos={backgroundVideos}
+                    onSelect={setSelectedBackgroundVideo}
+                    isLoading={isLoadingBackgroundVideos}
+                    disabled={isGreenscreenMode}
+                    onRefreshVideos={refreshBackgroundVideos}
+                  />
+                )}
                 <ImageUpload selectedTemplate={selectedTemplate} isGreenscreenMode={isGreenscreenMode} previewVideoRef={previewVideoRef} selectedBackground={selectedBackground} onClearBackground={() => setSelectedBackground(null)} onOpenImagePicker={() => setIsUnsplashPickerOpen(true)} />
                   {personaId && selectedTemplate && (
                   <FeedbackButtons onFeedback={handleFeedback} isLoading={isFeedbackLoading} currentStatus={feedbackStatus} />

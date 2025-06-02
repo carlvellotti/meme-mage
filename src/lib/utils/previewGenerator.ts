@@ -24,6 +24,46 @@ interface WatermarkSettings {
   backgroundOpacity: number; // 0 to 1
 }
 
+// Utility function to wrap text into lines
+function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = words[0];
+
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i];
+    const width = context.measureText(currentLine + ' ' + word).width;
+    if (width < maxWidth) {
+      currentLine += ' ' + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  lines.push(currentLine);
+  return lines;
+}
+
+// Helper function to draw background video with effects
+function drawBackgroundVideo(
+  ctx: CanvasRenderingContext2D, 
+  backgroundVideo: HTMLVideoElement, 
+  canvasWidth: number, 
+  canvasHeight: number
+) {
+  // Save current context state
+  ctx.save();
+  
+  // Apply blur filter and dark tint
+  ctx.filter = 'blur(40px) brightness(0.2)';
+  
+  // Draw the background video to fill entire canvas (stretch to exact dimensions)
+  ctx.drawImage(backgroundVideo, 0, 0, canvasWidth, canvasHeight);
+  
+  // Restore context state (removes filter)
+  ctx.restore();
+}
+
 export async function createMemePreview(
   videoUrl: string,
   caption: string,
@@ -43,12 +83,15 @@ export async function createMemePreview(
   // <<< Add watermark parameters >>>
   isWatermarkEnabled?: boolean,
   watermarkSettings?: WatermarkSettings,
-  videoVerticalOffset?: number
+  videoVerticalOffset?: number,
+  backgroundVideoUrl?: string
 ): Promise<HTMLCanvasElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     const backgroundImg = new Image();
+    let backgroundVideoElement: HTMLVideoElement | null = null;
     let isBackgroundLoaded = false;
+    let isBackgroundVideoLoaded = false;
     
     if (isGreenscreen && backgroundImage) {
       backgroundImg.crossOrigin = 'anonymous';
@@ -59,6 +102,41 @@ export async function createMemePreview(
         }
       };
       backgroundImg.src = backgroundImage;
+    }
+
+    // Load background video for non-greenscreen mode
+    if (!isGreenscreen && backgroundVideoUrl) {
+      backgroundVideoElement = document.createElement('video');
+      backgroundVideoElement.crossOrigin = 'anonymous';
+      backgroundVideoElement.muted = true;
+      backgroundVideoElement.loop = true;
+      backgroundVideoElement.playbackRate = 0.3; // Slow motion effect
+      
+      backgroundVideoElement.onloadeddata = () => {
+        // Set to start time immediately when loaded
+        backgroundVideoElement!.currentTime = 0.1;
+        isBackgroundVideoLoaded = true;
+        if (video.readyState >= 2) {
+          processFrame();
+        }
+      };
+      
+      backgroundVideoElement.onseeked = () => {
+        // Ensure we're ready after seeking to start position
+        if (isBackgroundVideoLoaded && video.readyState >= 2) {
+          processFrame();
+        }
+      };
+      
+      backgroundVideoElement.onerror = (e) => {
+        console.warn('Failed to load background video:', e);
+        isBackgroundVideoLoaded = false;
+        if (video.readyState >= 2) {
+          processFrame();
+        }
+      };
+      
+      backgroundVideoElement.src = backgroundVideoUrl;
     }
 
     video.src = videoUrl;
@@ -130,9 +208,65 @@ export async function createMemePreview(
         // Clear canvas with black background
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw video at the calculated position
-        ctx.drawImage(video, 0, videoTop, targetWidth, targetHeight);
+
+        // Draw background video if available (non-greenscreen only)
+        if (!isGreenscreen && backgroundVideoElement && isBackgroundVideoLoaded) {
+          drawBackgroundVideo(ctx, backgroundVideoElement, canvas.width, canvas.height);
+        }
+
+        if (isGreenscreen && isBackgroundLoaded) {
+          // First draw the background
+          ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
+          
+          // Create a temporary canvas for the video frame
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d')!;
+          tempCanvas.width = targetWidth;
+          tempCanvas.height = targetHeight;
+          
+          // Draw video frame to temp canvas
+          tempCtx.drawImage(video, 0, 0, targetWidth, targetHeight);
+          
+          // Get image data for processing
+          const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
+          const pixels = imageData.data;
+
+          // Green screen removal with improved thresholds
+          for (let i = 0; i < pixels.length; i += 4) {
+            const r = pixels[i];
+            const g = pixels[i + 1];
+            const b = pixels[i + 2];
+            
+            // Improved green screen detection
+            if (g > 100 && g > 1.4 * r && g > 1.4 * b) {
+              pixels[i + 3] = 0; // Make pixel transparent
+            }
+          }
+
+          // Put processed frame back
+          tempCtx.putImageData(imageData, 0, 0);
+          
+          // Draw processed frame onto main canvas
+          // Apply videoVerticalOffset if provided and not in cropped mode (for greenscreen)
+          let finalYOffset = yOffset; // Default yOffset
+          if (videoVerticalOffset !== undefined && !isCropped) { // Check !isCropped directly
+            const desiredCenterY = (canvasHeight * videoVerticalOffset) / 100;
+            const calculatedYOffset = desiredCenterY - (targetHeight / 2);
+            finalYOffset = Math.max(0, Math.min(calculatedYOffset, canvasHeight - targetHeight));
+          }
+          ctx.drawImage(tempCanvas, 0, finalYOffset, targetWidth, targetHeight);
+        } else {
+          // Regular video drawing
+          // Apply videoVerticalOffset if provided and not in cropped mode
+          let finalYOffset = yOffset; // Default yOffset
+          if (videoVerticalOffset !== undefined && !isCropped) { // MODIFIED HERE
+            const desiredCenterY = (canvasHeight * videoVerticalOffset) / 100;
+            const calculatedYOffset = desiredCenterY - (targetHeight / 2);
+            // Clamp to ensure video stays within canvas bounds
+            finalYOffset = Math.max(0, Math.min(calculatedYOffset, canvasHeight - targetHeight));
+          }
+          ctx.drawImage(video, 0, finalYOffset, targetWidth, targetHeight);
+        }
         
         // Draw caption above video
         if (caption) {
@@ -209,6 +343,11 @@ export async function createMemePreview(
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+        // Draw background video if available (non-greenscreen only)
+        if (!isGreenscreen && backgroundVideoElement && isBackgroundVideoLoaded) {
+          drawBackgroundVideo(ctx, backgroundVideoElement, canvas.width, canvas.height);
+        }
+
         if (isGreenscreen && isBackgroundLoaded) {
           // First draw the background
           ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
@@ -242,11 +381,12 @@ export async function createMemePreview(
           tempCtx.putImageData(imageData, 0, 0);
           
           // Draw processed frame onto main canvas
-          // Apply videoVerticalOffset if provided and not in cropped mode (for greenscreen)
+          // Apply videoVerticalOffset if provided and not in cropped mode
           let finalYOffset = yOffset; // Default yOffset
-          if (videoVerticalOffset !== undefined && !isCropped) { // Check !isCropped directly
+          if (videoVerticalOffset !== undefined && !isCropped) { // MODIFIED HERE
             const desiredCenterY = (canvasHeight * videoVerticalOffset) / 100;
             const calculatedYOffset = desiredCenterY - (targetHeight / 2);
+            // Clamp to ensure video stays within canvas bounds
             finalYOffset = Math.max(0, Math.min(calculatedYOffset, canvasHeight - targetHeight));
           }
           ctx.drawImage(tempCanvas, 0, finalYOffset, targetWidth, targetHeight);
@@ -571,7 +711,10 @@ export async function createMemePreview(
     };
 
     video.onseeked = () => {
-      if (!isGreenscreen || (isGreenscreen && isBackgroundLoaded)) {
+      const shouldProcessFrame = !isGreenscreen || (isGreenscreen && isBackgroundLoaded);
+      const backgroundVideoReady = !backgroundVideoElement || isBackgroundVideoLoaded;
+      
+      if (shouldProcessFrame && backgroundVideoReady) {
         processFrame();
       }
     };
@@ -580,34 +723,4 @@ export async function createMemePreview(
       reject(e);
     };
   });
-}
-
-// Helper function to wrap text
-function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const userLines = text.split('\n');
-  const lines: string[] = [];
-
-  userLines.forEach(userLine => {
-    if (userLine.trim() === '') {
-      lines.push('');
-      return;
-    }
-
-    const words = userLine.split(' ');
-    let currentLine = words[0];
-
-    for (let i = 1; i < words.length; i++) {
-      const word = words[i];
-      const width = context.measureText(currentLine + " " + word).width;
-      if (width < maxWidth) {
-        currentLine += " " + word;
-      } else {
-        lines.push(currentLine);
-        currentLine = word;
-      }
-    }
-    lines.push(currentLine);
-  });
-
-  return lines;
 } 
