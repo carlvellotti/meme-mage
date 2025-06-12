@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     // TODO: Log auth failure details (IP, user-agent)
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const userId = user.id; // Use userId if needed later for filtering based on user
+  const userId = user.id;
   // --------------------------
 
   try {
@@ -66,15 +66,18 @@ export async function POST(request: Request) {
         });
         const embedding = embeddingResponse.data[0].embedding;
 
-        // 2. Call Supabase RPC function 'match_meme_templates'
+        // 3. Call Supabase RPC function 'match_meme_templates'
+        // Using parameter names that match the database function signature
         rpcParams = {
-          embedding_param: embedding,
-          match_count_param: count,
-          filter_greenscreen_param: isGreenscreenMode,
-          user_id_param: userId,          // Pass user ID
-          persona_id_param: persona_id,    // Pass persona ID (can be null)
-          filter_category_param: category, // <-- Added category to RPC params for match
+          query_embedding: embedding,
+          match_threshold: 0.1, // Add threshold parameter
+          match_count: count,
+          filter_greenscreen: isGreenscreenMode || null,
+          user_id_param: userId,
+          persona_id_param: persona_id,
         };
+
+        console.log(`[User: ${userId}] RPC params for vector search:`, rpcParams);
 
         const { data: matchedData, error: matchError } = await supabase.rpc(
           'match_meme_templates',
@@ -90,18 +93,18 @@ export async function POST(request: Request) {
         error = e;
       }
     } else {
-      // --- Random Selection Logic ---
+      // --- Random Selection Logic --- (FIXED: moved outside the if block)
       console.log(`[User: ${userId}] Performing random template selection. Persona: ${persona_id || 'None'}`);
       try {
-        // Ensure all parameters expected by the SQL function are included here
-        // and match the order suggested by the error hint.
+        // Using parameter names that match the database function signature
         rpcParams = {
-          filter_greenscreen_param: isGreenscreenMode ?? null, // <-- Renamed to match hint
-          limit_count_param: count,  // <-- Renamed to match hint
-          user_id_param: userId,         
-          persona_id_param: persona_id,   
-          filter_category: category, 
+          limit_count: count,
+          filter_greenscreen: isGreenscreenMode || null,
+          user_id_param: userId,
+          persona_id_param: persona_id,
         };
+
+        console.log(`[User: ${userId}] RPC params for random selection:`, rpcParams);
         
         const { data: randomData, error: randomError } = await supabase.rpc(
           'get_random_meme_templates',
@@ -120,6 +123,7 @@ export async function POST(request: Request) {
 
     // Handle potential errors from Supabase calls
     if (error) {
+      console.error(`[User: ${userId}] Database error details:`, error);
       return NextResponse.json(
         { error: 'Failed to fetch templates from database', details: error.message },
         { status: 500 }
@@ -128,6 +132,7 @@ export async function POST(request: Request) {
 
     // Handle case where no templates are found
     if (!templates || templates.length === 0) {
+      console.log(`[User: ${userId}] No templates found for the given criteria`);
       return NextResponse.json(
         // Return empty array instead of 404, as finding nothing isn't strictly an error
         { templates: [] }, 
@@ -136,6 +141,7 @@ export async function POST(request: Request) {
     }
 
     // Return the selected templates
+    console.log(`[User: ${userId}] Returning ${templates.length} templates`);
     return NextResponse.json({ templates });
 
   } catch (e: any) {

@@ -26,21 +26,34 @@ interface WatermarkSettings {
 
 // Utility function to wrap text into lines
 function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const words = text.split(' ');
+  // Split text into lines based on user's line breaks first
+  const userLines = text.split('\n');
   const lines: string[] = [];
-  let currentLine = words[0];
 
-  for (let i = 1; i < words.length; i++) {
-    const word = words[i];
-    const width = context.measureText(currentLine + ' ' + word).width;
-    if (width < maxWidth) {
-      currentLine += ' ' + word;
-    } else {
-      lines.push(currentLine);
-      currentLine = word;
+  // Then handle word wrapping within each line
+  userLines.forEach(userLine => {
+    if (userLine.trim() === '') {
+      // Preserve empty lines
+      lines.push('');
+      return;
     }
-  }
-  lines.push(currentLine);
+
+    const words = userLine.split(' ');
+    let currentLine = words[0];
+
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+      const width = context.measureText(currentLine + " " + word).width;
+      if (width < maxWidth) {
+        currentLine += " " + word;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    lines.push(currentLine);
+  });
+
   return lines;
 }
 
