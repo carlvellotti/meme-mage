@@ -33,6 +33,15 @@ export interface BackgroundImage {
   };
 }
 
+export interface BackgroundVideo {
+  id: string;
+  name: string;
+  video_url: string;
+  thumbnail_url?: string | null;
+  created_at?: string;
+  is_active?: boolean;
+}
+
 export interface TextSettings {
   size: number;
   font: string;

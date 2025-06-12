@@ -23,6 +23,7 @@ interface VideoProcessingBaseParams {
   videoUrl: string;
   caption: string;
   backgroundUrl?: string;
+  backgroundVideoUrl?: string;
   isGreenscreenMode: boolean;
   textSettings: TextSettings;
   labels: Label[];
@@ -60,7 +61,8 @@ export const useVideoProcessing = () => {
         params.isCropped,
         params.isWatermarkEnabled,
         params.watermarkSettings,
-        params.videoVerticalOffset
+        params.videoVerticalOffset,
+        params.backgroundVideoUrl
       );
       setCurrentPreview(canvas);
     } catch (error) {
@@ -89,7 +91,8 @@ export const useVideoProcessing = () => {
         params.isCropped,
         params.isWatermarkEnabled,
         params.watermarkSettings,
-        params.videoVerticalOffset
+        params.videoVerticalOffset,
+        params.backgroundVideoUrl
       );
 
       const url = URL.createObjectURL(videoBlob);

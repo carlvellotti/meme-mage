@@ -96,6 +96,26 @@ function drawWatermark(
   ctx.restore();
 }
 
+// Helper function to draw background video with effects
+function drawBackgroundVideo(
+  ctx: CanvasRenderingContext2D, 
+  backgroundVideo: HTMLVideoElement, 
+  canvasWidth: number, 
+  canvasHeight: number
+) {
+  // Save current context state
+  ctx.save();
+  
+  // Apply blur filter and dark tint
+  ctx.filter = 'blur(40px) brightness(0.2)';
+  
+  // Draw the background video to fill entire canvas (stretch to exact dimensions)
+  ctx.drawImage(backgroundVideo, 0, 0, canvasWidth, canvasHeight);
+  
+  // Restore context state (removes filter)
+  ctx.restore();
+}
+
 // <<< Define wrapText if it's not already before createMemeVideo >>>
 // Function definition for wrapText should be here or imported
 
@@ -117,7 +137,8 @@ export async function createMemeVideo(
   isCropped?: boolean,
   isWatermarkEnabled?: boolean,
   watermarkSettings?: WatermarkSettings,
-  videoVerticalOffset?: number
+  videoVerticalOffset?: number,
+  backgroundVideoUrl?: string
 ): Promise<Blob> {
   // Create a container to hold and control all media elements
   const container = document.createElement('div');
@@ -135,6 +156,48 @@ export async function createMemeVideo(
     let backgroundImageElement = null;
     if (isGreenscreen && backgroundImage) {
       backgroundImageElement = await loadImage(backgroundImage);
+    }
+
+    // Load background video for non-greenscreen mode
+    let backgroundVideoElement = null;
+    let isBackgroundVideoReady = false;
+    
+    if (!isGreenscreen && backgroundVideoUrl) {
+      try {
+        backgroundVideoElement = await loadVideo(backgroundVideoUrl);
+        backgroundVideoElement.muted = true;
+        backgroundVideoElement.loop = true;
+        backgroundVideoElement.playbackRate = 0.5; // Slow motion effect
+        
+        // Set up proper synchronization for background video
+        backgroundVideoElement.onseeked = () => {
+          isBackgroundVideoReady = true;
+        };
+        
+        backgroundVideoElement.onerror = () => {
+          console.warn('Background video error during seek');
+          isBackgroundVideoReady = true; // Allow processing to continue
+        };
+        
+        // Set timeout as fallback in case seeking takes too long
+        setTimeout(() => {
+          if (!isBackgroundVideoReady) {
+            console.warn('Background video seek timeout, proceeding anyway');
+            isBackgroundVideoReady = true;
+          }
+        }, 2000); // 2 second timeout
+        
+        // Set initial position and wait for seek
+        backgroundVideoElement.currentTime = 0.1;
+        
+        container.appendChild(backgroundVideoElement);
+      } catch (error) {
+        console.warn('Failed to load background video:', error);
+        backgroundVideoElement = null;
+        isBackgroundVideoReady = true; // Allow processing to continue
+      }
+    } else {
+      isBackgroundVideoReady = true; // No background video, so we're ready
     }
 
     // Step 2: Set up canvas with proper dimensions
@@ -189,6 +252,11 @@ export async function createMemeVideo(
       // Clear canvas with black background
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw background video if available (non-greenscreen only)
+      if (!isGreenscreen && backgroundVideoElement && isBackgroundVideoReady) {
+        drawBackgroundVideo(ctx, backgroundVideoElement, canvas.width, canvas.height);
+      }
 
       // Draw background if in greenscreen mode
       if (isGreenscreen && backgroundImageElement) {
@@ -393,6 +461,11 @@ export async function createMemeVideo(
           videoElement.pause();
           audioElement.pause();
           
+          // Stop background video if available
+          if (backgroundVideoElement) {
+            backgroundVideoElement.pause();
+          }
+          
           // Stop all tracks
           canvasStream.getTracks().forEach(track => track.stop());
           if (audioStream) {
@@ -408,28 +481,51 @@ export async function createMemeVideo(
       videoElement.currentTime = 0.1;
       audioElement.currentTime = 0.1;
       
+      // Start background video if available
+      if (backgroundVideoElement) {
+        backgroundVideoElement.currentTime = 0.1;
+      }
+      
       // When video has seeked to the right position
       videoElement.onseeked = () => {
         // Remove event listener to prevent multiple calls
         videoElement.onseeked = null;
         
-        // Start recording
-        recorder.start(100); // Capture in 100ms chunks for smoother recording
+        // Function to check if all media is ready and start recording
+        const startRecordingIfReady = () => {
+          // Check if background video is ready (if we have one)
+          if (backgroundVideoElement && !isBackgroundVideoReady) {
+            // Background video not ready yet, wait a bit more
+            setTimeout(startRecordingIfReady, 50);
+            return;
+          }
+          
+          // All media is ready, start recording
+          recorder.start(100); // Capture in 100ms chunks for smoother recording
+          
+          // Start animation frame loop
+          updateCanvas();
+          
+          // Play both video and audio in sync
+          const playPromises = [
+            videoElement.play(),
+            audioElement.play()
+          ];
+          
+          // Also play background video if available
+          if (backgroundVideoElement) {
+            playPromises.push(backgroundVideoElement.play());
+          }
+          
+          // Handle any play errors
+          Promise.all(playPromises).catch(error => {
+            console.error('Error playing media:', error);
+            // Try to continue anyway
+          });
+        };
         
-        // Start animation frame loop
-        updateCanvas();
-        
-        // Play both video and audio in sync
-        const playPromises = [
-          videoElement.play(),
-          audioElement.play()
-        ];
-        
-        // Handle any play errors
-        Promise.all(playPromises).catch(error => {
-          console.error('Error playing media:', error);
-          // Try to continue anyway
-        });
+        // Start the ready check
+        startRecordingIfReady();
       };
     }).finally(() => {
       // Clean up all resources

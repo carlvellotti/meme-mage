@@ -414,7 +414,7 @@ export default function MemeSelectorV2() {
                   { role: 'system', content: currentSecondarySystemPrompt }, // Use the non-null constant
                   { role: 'user', content: userMessage }
                 ],
-                temperature: 0.7
+                temperature: 0.1
             };
 
             const promise2 = fetch('/api/ai/chat', { // Auth handled via cookie
